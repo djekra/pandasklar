@@ -8,7 +8,7 @@ import bpyth  as bpy
 from functools   import partial    
 from collections import Counter, defaultdict 
 
-from pandasklar.config       import Config
+from .config       import Config
 
 
 #from .python     import flatten, rtype, shape, superstrip
@@ -32,19 +32,25 @@ from pandasklar.config       import Config
 # ==================================================================================================
 # 
 #
-def dataframe(inp, test=False, verbose=None):
+def dataframe(inp, test=False, autotranspose=False, verbose=None):
     """ 
-    Wandelt mehrdimensionale Objekte in Dataframes um.
-    dict und tuple werden spaltenweise interpretiert,
-    list zeilenweise.
+    Converts multidimensional objects into dataframes.
+    Dictionaries and Tuples are interpreted column-wise, Lists and Counters by rows.
+    (Exception: A list of Series is also interpreted column-wise, like a tuple of Series.)
+    * test:           Do additional test if the shape is ok
+    * autotranspose:  False => no autotranspose
+                      n     => If the result is n times wider than long, it is transposed.  
     """
     
     if verbose is None:
-        verbose = Config.get('VERBOSE')      
+        verbose = Config.get('VERBOSE')   
+        
+    if isinstance(inp, pd.Series):
+        return pd.DataFrame(inp)
     
     def do_test(inp, result, test, verbose, inp_rtype, inp_shape, gedreht):
         if verbose:
-            print('gedreht='+str(gedreht) + ' Output rtype=' + str(bpy.rtype(result)), 'shape=' + str(bpy.shape(result)))
+            print('rotated='+str(gedreht) + ' Output rtype=' + str(bpy.rtype(result)), 'shape=' + str(bpy.shape(result)))
         if not test:
             return True
         
@@ -62,7 +68,7 @@ def dataframe(inp, test=False, verbose=None):
         
         if inp_shape != bpy.shape(result)[:2]:
             if verbose:
-                print('Shape passt nicht')            
+                print('Shape does not fit')            
             return False
         return True
     
@@ -117,7 +123,10 @@ def dataframe(inp, test=False, verbose=None):
     if len(inp_shape) == 1:
         result = pd.DataFrame([inp])
         assert do_test([inp], result, test=test, verbose=verbose,inp_rtype=inp_rtype, inp_shape=inp_shape, gedreht=gedreht)
-        return cols_benennen(result)    
+        if autotranspose  and  result.shape[0]*autotranspose < result.shape[1]:  # Hundertmal breiter als lang: transpose
+            result = result.transpose()    
+        result = cols_benennen(result)             
+        return result    
     
     if isinstance(inp, dict): 
         result = pd.DataFrame.from_records(inp, columns=inp.keys())
@@ -125,12 +134,9 @@ def dataframe(inp, test=False, verbose=None):
         result = pd.DataFrame.from_records(inp)
 
     assert do_test(inp, result, test=test, verbose=verbose, inp_rtype=inp_rtype, inp_shape=inp_shape, gedreht=gedreht)
-    result = cols_benennen(result)
-    
-    # Hundertmal breiter als lang: transpose
-    if result.shape[0]*100 < result.shape[1]:
+    if autotranspose  and  result.shape[0]*autotranspose < result.shape[1]: # Hundertmal breiter als lang: transpose
         result = result.transpose()
-        
+    result = cols_benennen(result)        
     return result
 
 
@@ -140,6 +146,10 @@ def dataframe(inp, test=False, verbose=None):
 # ==================================================================================================
 
 def drop_cols(df, colnames):
+    '''
+    Drops a column or a list of columns.
+    Does not throw an error if the column does not exist.
+    '''
     
     if type(colnames) is str:
         colnames = [colnames] #let the command take a string or list
@@ -153,25 +163,33 @@ def drop_cols(df, colnames):
 
 
 def rename_col(df, name_from, name_to):
-    # Umbenennung ist wahrscheinlich schon erfolgt
+    '''
+    Renames a column of a DataFrame.
+    If you try to rename a column again, no error is thrown (better for the workflow in jupyter notebooks).
+    '''
     if (name_to in df.columns) and (not name_from in df.columns):
-        return df
+        return df # if you try to rename a column again, no error is thrown.
     if name_to in df.columns:
-        raise ValueError( name_to + ' gibts schon!')
+        raise ValueError( name_to + ' already exists!')
     if not name_from in df.columns:
-        raise ValueError( name_from + ' gibts nicht!')        
+        raise ValueError( name_from + ' does not exist!')        
     return df.rename( columns = { name_from: name_to } )    
 
 
 
-#https://stackoverflow.com/questions/13148429/how-to-change-the-order-of-datadf-columns
-def move_cols( df, colnames, to=0 ):
-    """ Sortiert die Spalten um. Die spezifizierten Spalten kommen an den Anfang oder ans Ende.
-    
-    df:         Dataframe
-    colnames:   String oder Liste von Spaltennamen
-    to:         0: Vorne anhängen; -1: hinten anhängen; <i>: mittig anhängen; <colname>: mittig anhängen 
-    """    
+def move_cols( df, colnames=None, to=0 ):
+    ''' 
+    Reorders the columns of a DataFrame. 
+    The specified columns are moved to a numerical position or behind a named column.
+    If no arguments are given, sorts the columns lexicographically.
+     * colnames: String or list of column names
+     * to:       0: move to the front
+                -1: move to the back
+               <i>: move to position i (buggy)
+         <colname>: move behind a specific column
+    '''   
+    if colnames is None:
+        return df.reindex(sorted(df.columns), axis=1)  
     if type(colnames) is str:
         colnames = [colnames] #let the command take a string or list
         
@@ -206,24 +224,29 @@ def move_cols( df, colnames, to=0 ):
 
 
 def update_col(df_to, df_from, on=[], left_on=[], right_on=[], col='', col_rename='', func='', cond='', keep='', verbose=None):
-    """ 
-    Überträgt Daten von einem Dataframe zu einem anderen Dataframe und liefert das Ergebnis.
-    Anders als bei einem simplen merge bleibt dabei der Index und auch die dtypes erhalten. 
+    '''
+    Transfers one column of data from one dataframe to another dataframe.
+    Unlike a simple merge, the index and the dtypes are retained. 
+    Handles dups and conditions. Verbose if wanted.
     
-    df_to:      Dataframe, der geändert werden soll
-    df_from:    Dataframe, der die neuen Daten enthält. Muss nicht dupfrei sein.
-    on:         Feldname oder Array von Feldnamen, deren Werte übereinstimmen müssen 
-    left_on:    ggf. unterschiedlich für links und rechts
-    right_on:   ggf. unterschiedlich für links und rechts    
-    col:        Name der Spalte, die übertragen werden soll. Muss in df_from vorhanden sein. 
-                Wenn nicht vorhanden in df_to, wird sie angefügt. Wenn schon vorhanden, werden matchende Werte überschrieben.
-    col_rename: Neuer Name für col, falls angegeben        
-    func:       Name der Funktion, die zur Dup-Vermeidung verwendet wird. Z.B. 'max'. Wenn leer: Keine Dup-Vermeidung
-    cond:       Leer, 'min','max' oder 'null'. Nur schreiben wenn der neue Wert kleiner / größer als der bestehende Wert ist, 
-                oder bei 'null': wenn es keinen bestehenden Wert gibt.
-    keep:       Soll der ursprüngliche Wert behalten werden? Wenn ja, wird er in eine Spalte mit Namen _keep geschrieben. NaN, falls Datensatz unverändert!  
-    verbose:    Meldungen an / aus
-    """
+    df_to:      Dataframe to be changed
+    df_from:    Dataframe that contains the new data. Does not have to be duplicate-free.
+    on:         Column name or list of column names whose values must match 
+    left_on:    Different for left and right if necessary
+    right_on:   Different for left and right if necessary    
+    col:        Name of the column to be transmitted. Must exist in df_from. 
+                If not present in df_to, it will be appended. 
+                If already present, matching values will be overwritten.
+    col_rename: New name for col, if specified.        
+    func:       Name of the function used for dup avoidance. E.g. 'max'. If empty: No dup avoidance
+    cond:       Empty, 'min','max' or 'null'. 
+                'min','max': Only write if the new value is smaller / larger than the existing value
+                'null'     : Only write if there is no existing value in df_to
+    keep:       Should the original value be kept in a separate column? 
+                The string keep is used as suffix for this column.
+                NaN if record is unchanged!  
+    verbose:    Messages on / off
+    '''
     
     if verbose is None:
         verbose = Config.get('VERBOSE')      
@@ -259,9 +282,9 @@ def update_col(df_to, df_from, on=[], left_on=[], right_on=[], col='', col_renam
         ).reset_index()   
         df_from = rename_col(df_from, 'col_max', col)
         if (df_from.shape[0] == anz)  and  verbose:
-            print('update_col','func' ,func, 'angewendet, aber es war sinnlos!')
+            print('update_col:','func' ,func, 'applied, but it was pointless!')
         elif (df_from.shape[0] != anz)  and  verbose:
-            print('update_col','func' ,func, 'angewendet,', anz - df_from.shape[0], 'Datensätze weniger!')            
+            print('update_col:','func' ,func, 'applied,', anz - df_from.shape[0], 'records less!')            
     else:
         df_from = df_from[ right_on+[col] ].copy()
     
@@ -283,9 +306,6 @@ def update_col(df_to, df_from, on=[], left_on=[], right_on=[], col='', col_renam
     result = result.set_index('copy_index')
     result.index.name = copy_index_name
 
-    # https://stackoverflow.com/questions/11976503/how-to-keep-index-when-using-pandas-merge
-    #result = df_to.reset_index().merge(df_from, on=left_on, how='left', suffixes= ('', '_new')) #.set_index(df_to.index.names)
-    
     # keep
     if keep:
         result[col_rename+keep] = result[col_rename]  
@@ -303,7 +323,7 @@ def update_col(df_to, df_from, on=[], left_on=[], right_on=[], col='', col_renam
         else:         
             mask = result[col_new].notnull() 
         if verbose:
-            print(result[mask].shape[0], 'Datensätze geschrieben')
+            print(result[mask].shape[0], 'cells written')
         result.loc[mask, col_rename] = result.loc[mask, col_new]
         result = drop_cols(result,[col_new])
     
@@ -312,7 +332,7 @@ def update_col(df_to, df_from, on=[], left_on=[], right_on=[], col='', col_renam
         result.loc[mask,col_rename+keep] = np.NaN
         
     if df_to.shape[0] != result.shape[0]:
-        print('update_col','ERROR: df_from nicht eindeutig','Wird nochmal mit func aufgerufen')
+        print('update_col:','WARNING: df_from identifier not unique.','I call this again with func="max"')
         return update_col(df_to, df_from, left_on=left_on, right_on=right_on, col=col, col_rename=col_rename, func='max', keep=keep, verbose=verbose)
         
     return result
@@ -320,7 +340,11 @@ def update_col(df_to, df_from, on=[], left_on=[], right_on=[], col='', col_renam
     
     
 def copy_datatype(data_to, data_from):
-    """Kopiert die dtypes von df_from auf df_to für alle Spaltennamen die übereinstimmen"""
+    """
+    Copies the dtypes from data_from to data_to. 
+    Usable for Series and DataFrames.
+    When applied on a DataFrame, it's applied to all column names that match.
+    """
     
     result = data_to.copy()
     
@@ -352,34 +376,12 @@ def copy_datatype(data_to, data_from):
 # ==================================================================================================
 # Index
 # ==================================================================================================
-
-# Liefert einen Dataframe mit dem angegebenen Index.
-# Wenn als Index ein Dataframe angegeben wird, wird dessen Index verwendet.
-# Bsp:
-# force_index(lemmas_w, ['tagZ','lemma_lower'])
-# force_index(lemmas_w, stat)
-#
-def force_index(df, soll):
-    
-    # ist und soll festlegen
-    index_soll = soll
-    if type(soll)== pd.DataFrame:
-        index_soll = soll.index.names
-    index_ist = df.index.names
-    
-    if index_ist == index_soll:
-        return df
-    else:
-        result = reset_index(df)
-        return result.set_index( index_soll)
-    
-    
     
 
 def reset_index(df, keep_as=None):
     '''
     Creates a new, unnamed index.
-    If keep_as is given, the old index is preserved as a row with this name.
+    * keep_as: If keep_as is given, the old index is preserved as a row with this name.
     Otherwise the old index is dropped.
     '''
     
@@ -401,22 +403,21 @@ def reset_index(df, keep_as=None):
 
     
 
-
-
-
 # benennt den Index um
 def rename_index(df, soll):
+    '''
+    Renames the index
+    '''
     df.index.names = [soll]   
     return df
 
 
 
 
-# https://stackoverflow.com/questions/39092466/drop-multi-index-and-auto-rename-columns
-#
 def drop_multiindex(df, verbose=None):
     '''
-    Löscht jegliche MultiIndex eines DataFrame oder einer Series
+    Converts any MultiIndex to normal columns and resets the index. 
+    Works with MultiIndex in Series or DataFrames, in rows and in columns.
     '''
     
     if verbose is None:
@@ -425,31 +426,31 @@ def drop_multiindex(df, verbose=None):
     # Series mit MultiIndex
     if isinstance(df, pd.Series)   and   (df.index.nlevels > 1): 
         if verbose:
-            print('Series mit MultiIndex')
+            print('Series with MultiIndex')
         return df.reset_index()    
     
     # Series ohne MultiIndex
     if isinstance(df, pd.Series): 
         if verbose:
-            print('Series ohne MultiIndex')        
+            print('Series without MultiIndex')        
         return df    
     
     # DataFrame ohne MultiIndex: 
     if (df.columns.nlevels <= 1)   and   (df.index.nlevels <= 1):
         if verbose:
-            print('DataFrame ohne MultiIndex')             
+            print('DataFrame without MultiIndex')             
         return df
     
     # DataFrame mit Zeilen-MultiIndex: 
     if (df.columns.nlevels <= 1)   and   (df.index.nlevels > 1):
         if verbose:
-            print('DataFrame mit Zeilen-MultiIndex')         
+            print('DataFrame with Row-MultiIndex')         
         return df.reset_index()   
     
     # DataFrame mit Spalten-MultiIndex: 
     if (df.columns.nlevels > 1)   and   (df.index.nlevels <= 1):
         if verbose:
-            print('DataFrame mit Spalten-MultiIndex')            
+            print('DataFrame with Column-MultiIndex')            
         result = df.copy()
         result.columns = ['{}_{}'.format(col[0], col[1]) for col in result.columns]
         return result
@@ -457,7 +458,7 @@ def drop_multiindex(df, verbose=None):
     # DataFrame mit Zeilen- und Spalten-MultiIndex: 
     if (df.columns.nlevels > 1)   and   (df.index.nlevels > 1):
         if verbose:
-            print('DataFrame mit Zeilen- und Spalten-MultiIndex')          
+            print('DataFrame with Row- and Column-MultiIndex')          
         result = df.copy()
         result.columns = ['{}_{}'.format(col[0], col[1]) for col in result.columns]
         return result.reset_index()   
@@ -465,113 +466,165 @@ def drop_multiindex(df, verbose=None):
 
     #print([(col[0], col[1]) for col in df.columns])
 
-
+    
+    
+    
+# Liefert einen Dataframe mit dem angegebenen Index.
+# Wenn als Index ein Dataframe angegeben wird, wird dessen Index verwendet.
+# Bsp:
+# force_index(lemmas_w, ['tagZ','lemma_lower'])
+# force_index(lemmas_w, stat)
+#
+def force_index(df, soll):
+    
+    import warnings
+    warnings.warn("deprecated, use update_col for the old usecase", DeprecationWarning)    
+    
+    # ist und soll festlegen
+    index_soll = soll
+    if type(soll)== pd.DataFrame:
+        index_soll = soll.index.names
+    index_ist = df.index.names
+    
+    if index_ist == index_soll:
+        return df
+    else:
+        result = reset_index(df)
+        return result.set_index( index_soll)
 
 # ==================================================================================================
 # Rows
 # ==================================================================================================
 
-# früher: del_rows
-def drop_rows(df, mask, trash='KEINER', msg='', msgcol='msg', verbose=None, zähler=[0]):
-    """
-    * df ist der zu belöschende DataFrame
-    * mask kennzeichnet die zu löschenden Zeilen
-    * trash=None führt zu einem frischen Papierkorb
-    * trash=df_del führt dazu, dass die gelöschten Zeilen dort angehängt werden
-    * msg: Die Löschvorgänge werden damit gekennzeichnet. Wenn nicht angegeben, werden sie durchnummeriert.
-    * msgcol: Name der Spalte für msg, oder None
-    Aufrufe Beispiele:
-    df           = drop_rows( df, mask )                      # Löschen ohne Papierkorb    
-    df, df_trash = drop_rows( df, mask, None )                # Verschieben, neuer Papierkorb wird angelegt
-    df, df_trash = drop_rows( df, mask, df_trash )            # Verschieben, Papierkorb wird ergänzt
-        
-    df, df2      = move_rows( df, mask )                      # Verschieben ohne Papierkorb-Message, partial für
-                                                              # df, df2 = drop_rows( df, mask, None, msgcol=None ) 
-    """
-    
+
+def drop_rows(df, mask, verbose=None):
+    '''
+    Drops rows identified by a binary mask.
+    * verbose: True if you want to print how many rows are droped.
+    '''
+
     if verbose is None:
-        verbose = Config.get('VERBOSE')      
-    
+        verbose = Config.get('VERBOSE') 
+        
     # damit die Negation funktioniert
     try:
         mask = mask.fillna(False)
     except:
-        mask = np.nan_to_num(mask)
-    
-    # Methode erkennen
-    if trash is None:
-        method = 'CREATE'      
-    elif type(trash) == pd.DataFrame:
-        method = 'MOVE'
-        zähler[0]+=1 # Zähler aktualisieren https://stackoverflow.com/questions/21716940/is-there-a-way-to-track-the-number-of-times-a-function-is-called/21717084
-    else:
-        method = 'DEL'
-                
-    # msg   
-    if msg==''  and  method!='DEL': 
-        msg = zähler[0]
-    
-    # anz
-    anz = df[mask].shape[0]    
-    
+        mask = np.nan_to_num(mask)    
+        
     # verbose Statusmeldung
-    anz = df[mask].shape[0]
-    if verbose   and anz == 0: 
-        print('Keine Löschungen:', msg)        
-    elif verbose and method=='DEL'    and anz > 0: 
-        print('Lösche', anz, 'Datensätze von', df.shape[0], 'endgültig:', msg)    
-    elif verbose and method=='MOVE'   and anz > 0: 
-        print('Verschiebe', anz, 'Datensätze von', df.shape[0], 'in bestehenden DataFrame:', msg)     
-    elif verbose and method=='CREATE' and anz > 0: 
-        print('Verschiebe', anz, 'Datensätze von', df.shape[0], 'in neuen DataFrame:', msg)          
+    if verbose:
+        anz = df[mask].shape[0]
+        if anz == 0: 
+            print('No rows deleted')        
+        else: 
+            print('Delete', anz, 'rows from', df.shape[0])    
+        
+    return df[~mask].copy() 
+
+
+
+
+def move_rows(df_from, df_to=None, mask=None, msg='', msgcol='msg', verbose=None, zähler=[0]):
+    '''
+    Moves rows identified by a binary mask from one dataframe to another (e.g. into a trash).
+    Returns two DataFrames.
+    The target dataframe gets an additional message column by standard (to identify why the rows were moved).
+    If you don't give a message, move_rows will generate one: just the count of usage of the function.
+     
+    * df_from:   Origin DataFrame
+    * df_to:     Target DataFrame or None
+    * mask:      Binary mask, identifies the rows to be deleted
+    * msg:       All moved rows are marked with this message, it's written in the message column of the target dataframe
+    * msgcol:    Name of the message column. Set msg or msgcol to None if no message wanted.
+    * verbose:   True if you want to print how many rows are moved.
     
-    # Löschen ohne trash
-    if method=='DEL': 
-        return df[~mask].copy()    
+    Examples:
+    df, df_trash = move_rows( df, mask )           # move rows away (and create a new trash). 
+                                                   # The second argument is detected as mask, not as df_to.
+    df, df_trash = move_rows( df, df_trash, mask ) # move rows away (into the existing trash)   
+    '''
+    
+    if verbose is None:
+        verbose = Config.get('VERBOSE') 
+        
+    if not isinstance(df_from, pd.DataFrame):
+        raise ValueError('df_from must be a DataFrame') 
+        
+    # df_to enthält mask    
+    if isinstance(df_to, pd.Series):
+        mask  = df_to
+        df_to = None
+        
+    # msg   
+    if not df_to is None:
+        zähler[0]+=1   
+    if msg=='': 
+        msg = zähler[0]        
+        
+    # damit die Negation funktioniert
+    try:
+        mask = mask.fillna(False)
+    except:
+        mask = np.nan_to_num(mask) 
+        
+    # anz    
+    anz = df_from[mask].shape[0]         
+       
+    # verbose Statusmeldung
+    if verbose:
+        if anz == 0: 
+            print('No rows moved')               
+        else: 
+            print('Move', anz, 'rows from', df_from.shape[0])     
+            
+    # anz == 0    
+    if anz == 0 and not df_to is None:      
+        return df_from, df_to       
+    if anz == 0 and df_to is None:     
+        return df_from, pd.DataFrame()        
     
     # Löschen bestehendem trash    
-    if method=='MOVE'    and  anz > 0:     
-        t = df[mask].copy()
-        if msgcol:        
-            t[msgcol] = msg  # kennzeichnen   
-        #return df[~mask].copy() , trash.append(t)       
-        r1 = df[~mask].copy()
-        r2 = add_rows(trash,t)
+    if not df_to is None:     
+        t = df_from[mask].copy()
+        if msgcol and not msg is None:        
+            t[msgcol] = msg  # kennzeichnen          
+        r1 = df_from[~mask].copy()
+        r2 = pd.concat([df_to, t])
+        # r2 = add_rows(df_to,t)
         return r1, r2   
     
-    # Löschen bestehendem trash    
-    if method=='MOVE'   and  anz == 0:      
-        return df, trash    
-    
     # Löschen mit neuem trash    
-    if method=='CREATE' and anz > 0:     
-        t = df[mask].copy()
-        if msgcol:
+    if df_to is None:     
+        t = df_from[mask].copy()
+        if msgcol and not msg is None:
             t[msgcol] = msg # kennzeichnen  
-        return df[~mask].copy() , t
+        return df_from[~mask].copy() , t
+        
+    return "ERROR"            
     
-    if method=='CREATE' and anz == 0:     
-        return df, pd.DataFrame()    
-    
-    return "ERROR"
-
-
-# move_rows: Verschiebt Zeilen von einen DataFrame in einen anderen
-move_rows = partial(drop_rows, trash=None, msgcol=None)
 
 
 
 
-def add_rows(df_main, df_add, only_new=None, verbose=None):
-    """
-    Komfort-append.
-    Liefert pd.concat(df_main, df_add), allerdings
-    * die dtypes von df_add werden an die von df_main angepasst
-    * der Index wird neu erstellt, es gibt keine Dups in Index
-    * Statusmeldung, wieviele Datensätze angefügt wurden
-    * mit only_new können Spaltennamen angegeben werden. Dann werden nur neue Wertkombinationen dieser Spalten angefügt.
-    * es werden auch Series oder list zum Anhängen akzeptiert.
-    """
+
+
+
+
+
+def add_rows(df_main, df_add, only_new=None, reindex=False, verbose=None):
+    '''
+    Like concat, with additional features only_new and verbose.
+    * df_main:  The new rows are added to the end of this dataframe.
+    * df_add:   Rows to add. The dtypes are adapted to those of df_main.
+                Series or list are also accepted for appending.
+    * only_new: Avoid duplicates by setting this to a list of column names.
+                This combination must contain new content.
+                A single column name as string works the same way.
+                Or set only_new=True, this will avoid duplicate row indexes.
+    * reindex:  Will the result get a fresh index without dups?
+    * verbose:  Print status messages how many rows affected
+    '''
     
     if not type(df_main) is pd.DataFrame:
         df_main = dataframe(df_main, verbose=False)
@@ -584,25 +637,36 @@ def add_rows(df_main, df_add, only_new=None, verbose=None):
     
     # only_new
     if only_new:
-        if type(only_new) is str:
-            only_new = [only_new] #let the command take a string or list        
-        mask = ~isin(df_add, df_main, on=only_new)  
-
-    # Statusmeldung
-        if verbose:
-            print(df_add.shape[0]-df_add[mask].shape[0], 'Datensätze nicht angefügt')        
-        return add_rows(df_main, df_add[mask], verbose=verbose)  # rekursiver Aufruf
+        
+        #let the command take a string as well 
+        if isinstance(only_new,str):  
+            only_new = [only_new]  
+            
+        # only_new is list >> recursiv call
+        if isinstance(only_new,list):  
+            mask = ~isin(df_add, df_main, on=only_new)  
+            if verbose:
+                print(df_add.shape[0]-df_add[mask].shape[0], 'rows not attached')        
+            return add_rows(df_main, df_add[mask], reindex=reindex, verbose=verbose)
+        
+        # only_new=True >> recursiv call
+        if only_new==True:
+            mask = ~df_add.index.isin(df_main.index)   
+            if verbose:
+                print(df_add.shape[0]-df_add[mask].shape[0], 'rows not attached')        
+            return add_rows(df_main, df_add[mask], reindex=reindex, verbose=verbose)
+            
+        raise ValueError('only_new must be str, list or True') 
         
     # dtypes anpassen
     df_add = copy_datatype(df_add, df_main)     
     
-    # result
-    #result = df_main.append(df_add, ignore_index=True)    
-    result = pd.concat([df_main, df_add], ignore_index=True) 
+    # result  
+    result = pd.concat([df_main, df_add], ignore_index=reindex) 
     
     # Statusmeldung
     if verbose:
-        print(df_add.shape[0], 'Datensätze angefügt, jetzt insg.', result.shape[0])
+        print(df_add.shape[0], 'rows added, now a total of', result.shape[0])
     
     return result
 
@@ -616,121 +680,55 @@ def add_rows(df_main, df_add, only_new=None, verbose=None):
  
 
 #
-def find_in_list( df, suchspalte, suchstring ):
+def find_in_list( df, col_list_of_strings, searchstring ):
     '''
-    Wenn eine Spalte eine Liste von Strings enthält,
-    kann man mit dieser Funktion die Datensätze herausfiltern,
-    in deren Liste ein bestimmter Suchstring enthalten ist.
-    Geliefert wird eine Maske!    
+    Searches a column with a list of strings.
+    Returns a binary mask for the rows containing the searchstring in the list.    
     '''
-
-
-    zusatzfelder = pd.DataFrame(  df[suchspalte].explode()  )
-    mask_z  = (  zusatzfelder[suchspalte] == suchstring  )
+    zusatzfelder = pd.DataFrame(  df[col_list_of_strings].explode()  )
+    mask_z  = (  zusatzfelder[col_list_of_strings] == searchstring  )
     auswahl = zusatzfelder[mask_z]
     mask    = df.index.isin(auswahl.index)   
     return mask   
 
 
-# Eine Series enthält Listen.
-# Wendet eine Funktion elementweise auf jedes Element der Listen an.    
-# https://stackoverflow.com/questions/57511904/how-to-remove-empty-values-from-the-pandas-dataframe-from-a-column-type-list
-# Beispiel: wiktionary.tag = apply_on_elements( wiktionary.tag, lambda x:  x != '' )
-#
-def filter_lists(series, funktion):
-    return series.explode().loc[funktion].groupby(level=0).apply(list)
 
-
-
-# https://stackoverflow.com/questions/45306988/column-of-lists-convert-list-to-string-as-a-new-column
-#
-def list_to_string(series):
+# war: filter_lists
+# 
+def apply_on_elements(series, funktion):
     '''
-    Wandelt eine Series in String.
-    Wenn sie Listen enthält, werden die Elemente aufgezählt und mit Komma abgetrennt.
+    Applies a function to all elements of a Series of lists.
+    Example:
+    df = pak.people()
+    df['history2'] = pak.apply_on_elements(df.history, lambda x: x+'2' if x==x else '')    
+    Also works with sets.
+    '''
+    return series.explode().apply(funktion).groupby(level=0).apply(list)
+
+
+
+
+def list_to_string(series, sep=','):
+    '''
+    Converts a Series of lists of strings into a Series of strings.
+    * sep: The separator, default is ','
+    Example:
+    df = pak.people()
+    df['history2'] = pak.list_to_string(df.history)    
     '''
 
     def try_join(l):
         if not l:
             return ''
         try:
-            return ','.join(map(str, l))
+            return sep.join(map(str, l))
         except TypeError:
             return str(l)
 
     result = [try_join(l) for l in series]
+    result = pd.Series(result).astype('string')
     return result
     
-    
-    
-# ==================================================================================================
-# scale
-# ==================================================================================================
-     
-    
-# siehe die viel schönere Funktion normiere_rang !!
-#
-# Wandelt ein Tuple (Rang, Rang_max) in einen Score 0..1 um
-# Tuple erzeugt man z.B. so:
-# vornam_3['Score'] = list(zip(vornam_3.Rang, vornam_3.Rang_max)) 
-# 
-def rang2score(inputtuple):
-    rang, max = inputtuple
-    result = 1-(rang/max) 
-    if result > 0.001:
-        return result
-    else:
-        return 0.001
-
-
-
-
-
-def scale(series, typ, powerfaktor=1 ):
-    """ normiert eine series. Siehe Beispiele.
-        Der powerfaktor verzerrt die Ergebnisse, so dass die Verteilung nicht mehr linear ist.
-    """
-    if typ == 'rel':
-        return series / series.sum()  # alte Funktion normiere
-    elif typ == 'max_abs':
-        return series  / series.abs().max()
-    elif typ == 'min_max':
-        return (series - series.min())           /  (series.max() - series.min())
-    elif typ == 'min_max_robust':
-        return (series - series.quantile(0.01))  /  (series.quantile(0.99) - series.quantile(0.01))      
-    elif typ == 'mean':
-        return (series - series.mean()) / series.std()   
-    elif typ == 'median': # ist im median 0
-        return (series - series.median())  / (series.quantile(0.75) - series.quantile(0.25))     
-    elif typ == 'rank':
-        return normiere_rang( series, powerfaktor=powerfaktor)
-    elif typ == 'faktor':
-        median = series.quantile(0.5)        
-        result = series.copy()
-        result = 1 + scale( series, typ='median'  )  # erst mal für alle, ist im median 1          
-        mask = (series < median)           
-        result.loc[mask] = scale( series[mask], typ='min_max' )   # kleiner median: 0..1        
-
-        return result
-
-
-
-
-# normiert eine Series auf einen Wert 0..1
-# wahrscheinlich ohne die 0 und ohne die 1
-# Der powerfaktor verzerrt die Ergebnisse, so dass die Verteilung nicht mehr linear ist
-def normiere_rang(s, powerfaktor=1):
-    if powerfaktor == 1:
-        rang = s.rank(method='dense')
-    else:
-        rang = np.power(s.rank(method='dense'), powerfaktor)
-    maximum = rang.max()
-    result = rang / maximum
-    abziehen = result.min() / 2
-    return result - abziehen
-    #return np.sqrt(result - abziehen)
-
-
     
 
 
@@ -745,12 +743,12 @@ def normiere_rang(s, powerfaktor=1):
 # ==================================================================================================
 # isin
 #   
-def isin( df1, df2, on=[], left_on=[],right_on=[] ):
-    """ 
-    isin über mehrere Spalten. 
-    Liefert eine Maske für df1: Die df1, die mit df2 übereinstimmen.
+def isin( df1, df2, on=[], left_on=[], right_on=[] ):
+    '''
+    isin over several columns. 
+    Returns a mask for df1: The rows of df1 that match the ones in df2 in the specified columns.
     
-    """
+    '''
     if on:
         left_on  = on
         right_on = on        
@@ -763,528 +761,23 @@ def isin( df1, df2, on=[], left_on=[],right_on=[] ):
 
 
 
+#################################################################################################
+# ...............................................................................................
+# Series
+# ...............................................................................................
+#################################################################################################
 
 
-
-
-
-###############################################################################################
-# .............................................................................................
-# Aggregation
-# .............................................................................................
-###############################################################################################
-
-
-def group_and_agg(df, col_origins, col_funcs=None, col_names=None, dropna=True, verbose=None): 
+def repeat(content, size):
     '''
-    Gruppiert und aggregiert.
-    * col_origins: Liste aller columns, die verarbeitet werden sollen
-    * col_funcs:   Liste aller Funktionen, die darauf angewendet werden sollen. 
-                   Manchmal muss man Strings verwenden, manchmal Funktionsnamen.
-                   'group' oder '' = Gruppieren. 
-    * col_names:   Liste neuer Namen für die Ergebnisspalten. Optional. Leerzeichen = Standardname wird übernommen.
-    * dropna:      Parameter für groupby
-    Beispiel:
-    group_and_agg(df, 
-                  col_origins=['altersklasse','geburtsstadt', 'vorname',     'alter', 'alter', 'vorname'],
-                  col_funcs  =['group',       'group',        agg_strings,   'min',   'max',   'min'],
-                 )    
+    Creates a Series with defined size by repeating a list 
     '''
-    
-    if verbose is None:
-        verbose = Config.get('VERBOSE')      
-    
-    #df['dummy'] = 1
-    # Steuertabelle bauen
-    steuer = dataframe((col_origins,  col_funcs,  col_names), verbose=False)
-    steuer.columns =  ['col_origins','col_funcs','col_names']
-    #return steuer
-    steuer.col_funcs = steuer.col_funcs.fillna('')
-    mask = (steuer['col_funcs'].str.len() == 0)   
-    steuer.loc[mask,'col_funcs'] = 'group'   
-    
-    # cols_group: Die Spalten nach denen gruppiert werden soll
-    mask = (steuer.col_funcs == 'group')
-    cols_group = list(steuer[mask].col_origins)    
-    
-    g = steuer.groupby('col_origins')    
-    s = g.agg(list) #.reset_index()
-    s = s.drop(cols_group)
-    d = s.to_dict()['col_funcs'] # dict für agg
-    
-    # name_new errät den Namen des Feldes, das die agg-Funktion ausspuckt
-    steuer['name_new'] = steuer.col_origins 
-    mask = steuer.col_funcs.apply(lambda x: isinstance(x, str))   &   (steuer.col_funcs != 'group')
-    steuer.loc[mask,'name_new'] += '_' + steuer[mask].col_funcs
-    mask = steuer.col_funcs.apply(lambda x: callable(x))  
-    steuer.loc[mask,'name_new'] += '_' + steuer[mask].col_funcs.astype('str').str.split(' ').str[1].str.replace('>','').str.replace("'",'').str.replace('Series.','',regex=False).str.replace('.','',regex=False) 
-    reihenfolge = list(steuer.name_new)
-
-    if col_names:
-        mask = (steuer['col_names'].str.len() == 0)
-        steuer.loc[mask,'col_names'] = steuer[mask].name_new # Standardnamen übernehmen
-    #return steuer    
-    
-    # result bauen
-    if d:    
-        gruppiert = df.groupby(cols_group, dropna=dropna)
-        result = gruppiert.agg(d) 
+    s = int(size / len(content))
+    result = pd.Series(content).repeat(s)
+    if size % len(content) == 0:
+        return result.reset_index(drop=True)
     else:
-        result = df.groupby(cols_group, dropna=dropna, as_index=False).first()[cols_group]
-
-    result = drop_multiindex(result, verbose=False)
-    if len(cols_group) == 1:
-        result = result.reset_index() # in anderen Fällen macht drop_multiindex das
-    #print('reihenfolge',reihenfolge)
-    result = move_cols(result, reihenfolge)   
-    
-    if verbose:
-        n0 = df.shape[0]
-        n1 = result.shape[0]        
-        print( '{0} Datensätze weniger, jetzt {1} Datensätze'.format(n0-n1, n1)  )
-    
-    
-    if not col_names:      
-        return result
-    #return steuer
-    #print(list(result.columns))
-    #print(list(steuer['col_names']))
-    result.columns = list(steuer['col_names'])
-    return result
-    
-
-
-
-
-
-def most_freq_elt(s):  
-    '''
-    Liefert das häufigste Element
-    Wie Series.mode, aber liefert immer ein Skalar
-    d.h. wenn zwei Elemente gleichhäufig sind, wird einfach irgendeines zurückgegeben 
-    ''' 
-    try:
-        result = list(s.mode())[0]
-    except IndexError:
-        result = np.NaN
-    return result
-        
-    
-    
-
-def top_values(series, limit=3, count=False):
-    '''
-    Liefert eine Liste der häufigsten Elemente
-    oder, wenn es nur eines gibt, dieses Einzelelement
-    Beispiel siehe Pandas/LISTS
-    df.groupby('sex')['age'].apply(top_values)
-    Vorsicht, funktioniert nicht gut bei sehr langen Datensätzen
-    Wenn count=True werden nicht die Elemente, sondern deren Häufigkeit geliefert    
-    '''
-    
-    liste = series.to_list()    
-    try:
-        c = Counter(liste)
-    except TypeError:
-        flat_liste = bpy.flatten(liste)
-        c = Counter(flat_liste)
-        
-    häufig = c.most_common(limit)
-    if count:
-        result = [cnt for word,cnt in häufig]
-    else:
-        result = [word for word,cnt in häufig]
-        
-    # lesbarer machen    
-    if len(result) == 0:
-        return ''
-    if len(result) == 1:
-        return result[0]  
-    
-    return result    
-
-def top_values_count(series, limit=3):
-    return top_values(series, limit=limit, count=True)
-
-# partials für Aufruf in Aggregationen
-# Werden hier nicht als Partial definiert, weil group_and_agg die Spaltennamen dann nicht erraten kann und durcheinander kommt
-
-def top_values_3(series):    return top_values(series, limit=3)
-def top_values_5(series):    return top_values(series, limit=5)
-def top_values_10(series):   return top_values(series, limit=10)
-def top_values_20(series):   return top_values(series, limit=20)
-def top_values_100(series):  return top_values(series, limit=100)
-def top_values_1000(series): return top_values(series, limit=1000)
-
-def top_values_count_3(series):    return top_values_count(series, limit=3)
-def top_values_count_5(series):    return top_values_count(series, limit=5)
-def top_values_count_10(series):   return top_values_count(series, limit=10)
-def top_values_count_20(series):   return top_values_count(series, limit=20)
-def top_values_count_100(series):  return top_values_count(series, limit=100)
-def top_values_count_1000(series): return top_values_count(series, limit=1000)
-
-
-
-    
-    
-    
-
-
-def agg_words(s):
-    '''
-    Aggregiert Strings zu einem langen String.
-    Es wird immer ein Space zwischen die einzelnen Elemente gesetzt,
-    die Reihenfolge bleibt erhalten
-    '''
-    try:
-        result = ' '.join(s.fillna(''))    
-        result = bpy.superstrip(result)
-    except:
-        result = np.NaN
-    return result
-
-# alter Name
-def agg_strings(s):
-    warnings.warn('agg_strings wurde umbenannt in agg_words')
-    return agg_words(s)
-
-
-
-
-
-def agg_strings_nospace(s):
-    '''
-    Aggregiert Strings zu einem langen String.
-    Keine Trennzeichen zwischen den Teilstrings.
-    '''
-    try:
-        result = ''.join(s.fillna(''))
-    except:
-        result = np.NaN
-    return result
-
-
-
-
-
-def agg_words_nodup(s):
-    '''
-    Aggregiert Strings (z.B. Signalwörter) zu einem langen String.
-    Es wird immer ein Space zwischen die einzelnen Elemente gesetzt,
-    die Reihenfolge bleibt erhalten,
-    Duplikate werden entfernt.
-    '''
-    return agg_words(  s.str.split().explode().drop_duplicates()  )
-
-
-# alter Name
-def agg_strings_like_set(s):
-    warnings.warn('agg_strings_like_set wurde umbenannt in agg_words_nodup')
-    return agg_words_nodup(s)
-
-
-    
-
-
-def agg_to_list(s):
-    '''
-    Aggregiert Elemente zu einer Liste. 
-    Das geht zwar normalerweise auch über ein einfaches 'list', aber im Zusammenspiel mit transform funktioniert das nicht.
-    Dann lässt sich als Ersatz agg_to_list verwenden.
-    Siehe # https://stackoverflow.com/questions/62458837/groupby-transform-to-list-in-pandas-does-not-work
-    '''
-    result = [s.tolist()]*len(s)
-    #result = list(s.astype(int))
-    return result    
-
-
-
-def agg_dicts(s):
-    '''
-    Aggregiert dicts zu einem einzelnen dict.
-    Kommt ein key mehrfach vor, wird der value überschrieben.
-    '''
-    result = {key: value for d in s for key, value in d.items()}
-    return result
-
-
-
-def agg_dicts_2dd(s):
-    '''
-    Aggregiert dicts oder defaultdict zu einem einzelnen defaultdict(list).
-    D.h. mehrfache keys sind erlaubt. Die Values sind immer Listen.  
-    '''    
-    result = defaultdict(list)
-    for d in s:
-        for key, value in d.items():
-            if not value in result[key]:
-                result[key].append(value)  
-    return result
-
-
-
-def agg_defaultdicts(s):
-    '''
-    Aggregiert defaultdict(list).
-    '''    
-    result = defaultdict(list)
-    for d in s:
-        for key in d:
-            result[key].extend( d[key] )  
-            result[key] = list(dict.fromkeys( result[key] )) # Dups entfernen
-            
-    return result
-
-
-
-
-# ==================================================================================================
-# dict
-# ==================================================================================================
- 
-
-    
-# https://stackoverflow.com/questions/67336514/pandas-explode-dictionary-to-rows
-#
-def explode_dict(df, colname, keyname='key', valuename='value', from_defaultdict=False):
-    '''
-    Wie explode, aber für ein dict.
-    df:               Input-Dataframe
-    colname:          enthält dict to explode
-    keyname:          Name der neuen Spalte für die keys des dict
-    valuename:        Name der neuen Spalte für die values des dict   
-    from_defaultdict: Soll ein zusätzliches explode ausgeführt werden? 
-                      Das kann bei defaultdicts sinnvoll sein. Andernfalls erhält man Listen.
-    '''
-    
-    result = pd.DataFrame([*df[colname]], df.index).stack().rename_axis([None,keyname]).reset_index(1, name=valuename)
-    result = df.join(result)
-    result = drop_cols(result,colname)
-    
-    if from_defaultdict:
-        return result.explode(valuename)
-    else:
-        return result  
-    
-    
-
-    
- 
-    
-def implode_to_dict(df, groupcols=None, keyname=None, valuename=None, resultname=None, use_defaultdict=False):
-    '''
-    Macht aus zwei Spalten ein dict. 
-    Umkehrung von explode_dict.
-    * groupcols        ist ein String oder eine Liste von Namen, nach denen gruppiert wird.
-                       Das beeinflusst die Breite der Ergebnisse. None=keine Gruppierung.
-    * keyname          ist der Name der Spalte, die die Keys enthält
-    * valuename        ist der Name der Spalte, die die Values enthält
-    * resultname       legt fest, die die Ergebnisspalte heißen soll
-    * use_defaultdict  legt fest, ob das Ergebnis ein dict oder ein defaultdict ist. Default: False.
-                       Bei use_defaultdict=True überschreiben mehrfach vorkommende Keys einander nicht,
-                       die Values sind immer eine Liste.
-    '''
-    
-    if not keyname or not valuename or not resultname:
-        raise
-    
-    # groupcols
-    if not groupcols:                                                        # None
-        alle = list(df.columns)
-        groupcols = [c for c in alle if c not in [keyname, valuename]  ]
-    elif groupcols  and not isinstance(groupcols, list):                     # Einzelner String
-        groupcols = [groupcols]    
-    
-    # group_and_agg
-    params1 = groupcols + [keyname, valuename]
-    params2 = ['group'] * len(groupcols) + [list, list]
-    dfg = group_and_agg(df, params1, params2, params1)
-    
-    # worker für die zip-Arbeit
-    def worker_defaultdict(zeile, keyname, valuename, resultname):
-        my_dict = defaultdict(list)
-        for k, v in zip(zeile[keyname], zeile[valuename]):
-            if not v in my_dict[k]:
-                my_dict[k].append(v)          
-        zeile[resultname] = my_dict        
-        return zeile       
-    
-    def worker_dict(zeile, keyname, valuename, resultname):
-        zeile[resultname] = dict(zip(zeile[keyname], zeile[valuename]))
-        return zeile    
-    
-    # worker anwenden
-    if use_defaultdict:
-        result = dfg.apply(worker_defaultdict, axis=1, keyname=keyname, valuename=valuename, resultname=resultname)
-    else:
-        result = dfg.apply(worker_dict,        axis=1, keyname=keyname, valuename=valuename, resultname=resultname)    
-    
-    # Ende
-    result = drop_cols(result,[keyname, valuename] )
-    
-    return result    
-    
-    
-# implode_to_defaultdict
-implode_to_defaultdict = partial(implode_to_dict, use_defaultdict=True)       
-
-   
-    
-    
-def cols_to_dict(df, col_dict='', cols_add=[], use_defaultdict=False, drop=True):
-    '''
-    Verpackt Spalten in ein dict oder defaultdict.
-    * df
-    * col_dict:        Name der Zielspalte. Kann leer sein, kann aber auch schon ein dict oder defaultdict enthalten. 
-    * cols_add:        Spalten, die verpackt werden sollen
-    * use_defaultdict: Soll als Datenstruktur ein defaultdict verwendet werden? Andernfalls können keys nur einmal vorkommen.
-    * drop:            Sollen die verpackten Spalten gelöscht werden?
-    
-    cols_to_dict( df, col_dict='A', use_defaultdict=True) # dirty trick: dict in defaultdict wandeln
-    '''
-    
-    # Listen erzwingen
-    if cols_add  and not isinstance(cols_add, list):
-        cols_add = [cols_add]        
-    
-    
-    def worker_dict(zeile, col_dict, cols_add):
-        
-        # Start
-        zr = {}
-        if col_dict in zeile.index:
-            if isinstance(zeile[col_dict], dict):
-                zr = dict(zeile[col_dict]) # copy                    
-        
-        # cols dazurechnen
-        for col in cols_add:
-            try:
-                if (zeile[col] and not pd.isna(zeile[col]))  or  (zeile[col] == 0):
-                    d = {col:zeile[col]}
-                    zr.update(d)    
-            except: # für Listen, die auch leer sein können
-                d = {col:zeile[col]}
-                zr.update(d)  
-            
-        zeile[col_dict] = zr
-        return zeile
-    
-    
-    
-    
-    def worker_defaultdict(zeile, col_dict, cols_add):
-        
-        # Start
-        zr = defaultdict(list)
-        if col_dict in zeile.index:
-            if isinstance(zeile[col_dict], defaultdict):
-                zr = copy.deepcopy(zeile[col_dict])
-            elif isinstance(zeile[col_dict], dict):
-                startvalue = { k:[v] for k,v in zeile[col_dict].items()}
-                zr = defaultdict(list,startvalue)
-
-        # cols dazurechnen
-        for col in cols_add:
-            if (zeile[col] and not pd.isna(zeile[col]))  or  (zeile[col] == 0):
-                zr[col].append(zeile[col])     
-            
-        zeile[col_dict] = zr
-        return zeile        
-           
-    
-    
-    # worker anwenden
-    if use_defaultdict:
-        result = df.apply(worker_defaultdict, axis=1, col_dict=col_dict, cols_add=cols_add )
-    else:
-        result = df.apply(worker_dict,        axis=1, col_dict=col_dict, cols_add=cols_add ) 
-        
-    
-    # Ende
-    if drop:
-        result = drop_cols(result,cols_add )
-    
-    return result
-
-
-# cols_to_defaultdict
-cols_to_defaultdict = partial(cols_to_dict, use_defaultdict=True)  
-
-
-
-# ==================================================================================================
-# Ranking
-# ==================================================================================================
-#
-# https://stackoverflow.com/questions/50381064/select-the-max-row-per-group-pandas-performance-issue # Will man nicht nur einen Datensatz, sondern alle gleichwertigen Datensätze finden,
-# verwendet man die eingebaute Funktion groupby.rank
-# https://stackoverflow.com/questions/33899369/ranking-order-per-group-in-pandas
-    
-#rank_sortdrop    
-def rank(df, group_spalten, score_spalte, richtung='max', target_spalte='', method='first'):
-    """ Gruppiert und ranked. Liefert das beste Ergebnis, oder aber den Ursprungsframe mit zugefügter Ranking-Spalte.
-    
-    df:              Dataframe
-    group_spalten:   Array von Feldnamen, nach denen gruppiert werden soll
-    score_spalte:    Name der Spalte, deren Minimum oder Maximum gefunden werden soll.
-    richtung:        Soll nach Maximum oder Minimum gesucht werden? Voreinstellung: max
-    target_spalte:   Soll eine Ranking-Spalte hinzugefügt werden? Wenn ja, dann hier den Namen angeben
-    method:          Wie soll mit uneindeutigen Ergebnissen umgegangen werden?
-    """    
-    
-    if richtung=='max':
-        ascending = False
-    else:
-        ascending = True    
-    
-    if target_spalte=='':
-        result = df.sort_values(by=score_spalte, ascending=ascending, kind='mergesort').drop_duplicates(group_spalten)
-    else:
-        result = df.copy()
-        result[target_spalte] = result.groupby(group_spalten)[score_spalte].rank(method=method, ascending=ascending)
-        result[target_spalte] = result[target_spalte].fillna(999999)
-        result[target_spalte] = result[target_spalte].astype(int)         
-        
-    return result 
-
-        
-    
-def rank_sort(df, group_spalten, score_spalte, richtung='max'):
-    
-    if richtung=='max':
-        keep = 'last'
-    else:
-        keep = 'first'
-        
-    sort_spalten = group_spalten + [score_spalte]
-    found        = df.sort_values(sort_spalten).drop_duplicates(group_spalten, keep=keep).index
-    
-    return df.loc[found]    
-    
-    
-def rank_idxminmax(df, group_spalten, score_spalte, richtung='max'):
-    
-    if richtung=='max':
-        found = df.groupby(group_spalten)[score_spalte].idxmax()
-    else:
-        found = df.groupby(group_spalten)[score_spalte].idxmin()
-            
-    return df.loc[found]       
-
-
-
-
-
-
-# aggregiert Strings 
-# Es wird immer ein Space zwischen die einzelnen Elemente gesetzt,
-# die Reihenfolge bleibt erhalten
-##ef agg_to_set(s): 
-##   try:
-##       result = sorted(list(set(s.fillna(''))))
-##   except:
-##       result = np.NaN
-##   return result
+        return pd.concat([result,pd.Series(content)]).head(size).reset_index(drop=True)
 
 
 

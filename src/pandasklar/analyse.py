@@ -10,50 +10,51 @@ from pandas.api.types import is_string_dtype, is_numeric_dtype
 
 import bpyth  as bpy
 
-from pandasklar.type_info    import type_info
-from pandasklar.values_info  import values_info
+from .type_info    import type_info
+from .values_info  import values_info
 
-from pandasklar.config       import Config
-from pandasklar.pandas       import scale, drop_cols, rename_col, move_cols, reset_index, dataframe, group_and_agg
-from pandasklar.pandas       import top_values, top_values_count
-from pandasklar.pandas       import drop_cols
+from .config       import Config
+from .pandas       import dataframe, reset_index, drop_cols, rename_col, move_cols 
+from .aggregate    import group_and_agg, top_values, top_values_count
+from .scale        import scale
 
+
+    
 try:
     from termcolor import colored    
 except ImportError:
     pass
 
-    
-import seaborn as sns
+
 import matplotlib.pyplot as plt
 #sns.set()
 
 
 try:
-    import seaborn
+    import seaborn as sns
 except ImportError:
-    print('seaborn nicht importierbar')  
+    print('seaborn not importable')  
     
 
 
-#import locale 
-#locale.setlocale(locale.LC_ALL, '') 
 
-#from pandasklar.analyse  import type_info, values_info, val_first_valid
 
 
 
 # ==================================================================================================
-# Load (gehört eigentlich nicht hierher, muss aber wg. changedatatype
+# Load und save (gehört eigentlich nicht hierher, muss aber wg. changedatatype
 # ==================================================================================================
 # 
 #
-def load_pickle( filename, resetindex='AUTO', changedatatype=True, verbose=False ): 
+def load_pickle( filename, resetindex='AUTO', changedatatype=False, verbose=False ): 
     '''
-    Convenient function to load a DataFrame from pickle-File
-    resetindex == True:   Force reset_index
-    resetindex == False:  No reset_index    
-    resetindex == 'Auto': (Standard) Automatic        
+    Convenient function to load a DataFrame from pickle file.
+    Optional optimisation of datatypes. Verbose if wanted.
+    resetindex = True:    Force reset_index
+    resetindex = False:   No reset_index    
+    resetindex = 'Auto':  (Standard) Automatic     
+    changedatatype:       Should the datatypes get optimized?
+    verbose:              True if messages are wanted.
     '''
     result = bpy.load_pickle(filename)
     if resetindex == True:
@@ -71,11 +72,30 @@ def load_pickle( filename, resetindex='AUTO', changedatatype=True, verbose=False
         if verbose:
             print('no reset_index')        
     if changedatatype:
-        result = change_datatype(result, verbose=False)
+        if verbose:        
+            print('change_datatype')         
+        result = change_datatype(result, verbose=verbose)
+
     return result
 
- 
 
+
+
+def dump_pickle( df, filename, changedatatype=True, verbose=False ): 
+    '''
+    Convenient function to save a DataFrame to a pickle file.
+    Optional optimisation of datatypes. Verbose if wanted.
+    changedatatype:       Should the datatypes get optimized?
+    verbose:              True if messages are wanted.    
+    '''
+    if changedatatype:
+        if verbose:        
+            print('change_datatype')         
+        df = change_datatype(df, verbose=False)
+    bpy.dump_pickle(df,filename)
+
+    
+    
     
 #################################################################################
 # ...............................................................................
@@ -86,38 +106,26 @@ def load_pickle( filename, resetindex='AUTO', changedatatype=True, verbose=False
 
     
 def mem_usage(data):
-    """Liefert den Speicherverbrauch einer Series oder eines Dataframe"""
+    """Returns the memory consumption of a Series or a DataFrame"""
     
     if isinstance(data, pd.Series): 
         result = data.memory_usage(index=False, deep=True)
-        return sizeof_fmt(result)    
+        return bpy.human_readable_bytes(result)    
     
     elif isinstance(data, pd.DataFrame):
         result = data.memory_usage(index=False, deep=True).sum()
-        return sizeof_fmt(result)    
+        return bpy.human_readable_bytes(result)    
         
     else:
         assert 'ERROR'    
 
 
 
-# für mem_usage: Menschenlesbare Darstellung von Bytes
-def sizeof_fmt(num, suffix=''):
-    for unit in [' ',' K',' M',' G',' T',' P',' E',' Z']:
-        if abs(num) < 1024.0:
-            return "%3.1f%s%s" % (num, unit, suffix)
-        num /= 1024.0
-    return "%.1f%s%s" % (num, 'Y', suffix)
-
-    
-
-
-
-
 
 # Alle class_info einer Series oder eines Index   
 def analyse_datatype(data):
-    """ Liefert Metadaten zu einer Series oder einem Index in Form eines dict 
+    """ 
+    Returns a dict with info about the datatypes of a Series or Index and it's content
     """
     
     # Aufruf mit Index
@@ -145,8 +153,12 @@ def analyse_datatype(data):
 
 # Alle class_info eines DataFrame
 def analyse_datatypes(df, with_index=True):
-    """ Liefert die datatypes eines DataFrames
     """
+    Returns info about the datatypes and the mem_usage of the columns of a DataFrame.  
+    """
+    if isinstance(df, pd.Series): 
+        return dataframe(analyse_datatype(df), verbose=False)    
+    
     data  = [] 
     if with_index:
         data += [ analyse_datatype(df.index)]
@@ -163,16 +175,18 @@ def analyse_datatypes(df, with_index=True):
 
 # Spaltennamen, die bestimmte Kriterien erfüllen
 def col_names(df, only='', without='XXXXXX', as_list=True, query=None, sort=False ):
-    """ selektiert Spaltennamen auf Basis von analyse_cols. Sinnvoll um eine Methode auf bestimmte Spalten eines DataFrame anzuwenden.
-        * only:     Nur Spaltennamen, deren datatype so beginnt
-        * without:  Ohne Spaltennamen, deren datatype so beginnt
-        * as_list:  Ergebnis als Liste ausgeben (sonst als DataFrame, sinnvoll zur Entwicklung und Kontrolle)
-        * sort: nach nunique sortiert
-        datatypes werden aus analyse_datatypes, Feld datatype_short oder datatype_instance entnommen.
-        
-        Beispiel: Alle str-Spalten mit fillna behandeln
-        cols = col_names(df, only='str', query='nnan > 0')
-        df[cols] = df[cols].fillna('')
+    """ 
+    Selects column names based on analyse_cols. Useful to apply a method to specific columns of a DataFrame.
+    * only:     Only column names whose datatype begins like this.
+    * without:  Without column names whose datatype starts like this
+    * as_list:  Output result as list (otherwise as DataFrame, useful for development and control)
+    * query:    additional conditions
+    * sort:     sorted by nunique
+    datatypes are taken from analyse_datatypes, field datatype_short or datatype_instance.
+
+    Example: treat all str columns with fillna
+    cols = col_names(df, only='str', query='nnan > 0')
+    df[cols] = df[cols].fillna('')        
     """
     if sort:
         df = sort_cols_by_nunique(df)
@@ -199,32 +213,21 @@ def col_names(df, only='', without='XXXXXX', as_list=True, query=None, sort=Fals
     
 
     
-    
-def search_str(df, find, without=[]):
-    """ Durchsucht alle str-Spalten eines Dataframe.
-        * df
-        * find:     Was soll gefunden werden?                      String oder Liste von Strings.
-        * without:  Welche Spalten sollen nicht durchsucht werden? String oder Liste von Strings.
-    """
-    # Argumente formatieren
-    if type(find) is str:
-        find = [find] 
-    if type(without) is str:
-        without = [without]
-        
-    cols = col_names(df, only='str')
-    cols = [c for c in cols if not c in without]
-    mask = df[cols].isin(find).any(axis=1)  
-    return df[mask]    
-    
+
     
     
 def change_datatype(data, search=None, verbose=None, msg='', category_maxsize=-1, nanless_ints=False):
-    """ Wie astype, akzeptiert aber alle Klassenangaben, die auch type_info akzeptiert.
-        Ganz ohne Klassenangabe wird der neue datatype vollautomatisch gewählt.
-        Funktioniert auch mit ganzen DataFrames (dann darf aber kein datatype vorgegeben werden)
-        * category_maxsize: Wie groß darf eine category werden, damit sie als datatype_suggest vorgeschlagen wird?
-        * nanless_ints: Werden Numpys Integerklassen (die kein NaN kennen) als datatype_suggest vorgeschlagen?        
+    """ 
+    Converts the datatypes of a DataFrame or a Series.
+    If used with a Series:    
+    Similar behavior as pandas astype. But it also accepts
+    sloppy class names like type_info knows.
+    If no target datatype is specified, it will be selected automatically.
+    If used with a DataFrame:
+    Converts all datatypes automatically.                      
+
+    * category_maxsize: How big can a category get to be suggested as datatype_suggest?
+    * nanless_ints: Are numpy's integer classes (that don't know NaN) suggested as datatype_suggest?    
     """
 
     if verbose is None:
@@ -256,7 +259,7 @@ def change_datatype(data, search=None, verbose=None, msg='', category_maxsize=-1
             print('change_datatype', msg )        
         result = data.apply(change_datatype, verbose=verbose   )
         if verbose:
-            print('change_datatype','vorher:', mem_usage(data),'nachher:',mem_usage(result))
+            print('change_datatype','before:', mem_usage(data),'after:',mem_usage(result))
             print()
         return result
     
@@ -276,7 +279,8 @@ change_datatypes = change_datatype
     
     
 def analyse_values(data, as_list=False, as_dict=False, sort=False, with_index=True, nanless_ints=False):
-    """ Liefert Statistikdaten zu einem DataFrame, einer Series oder einem Index   
+    """ 
+    Returns statistical data for a DataFrame, a Series or an Index     
     """
     
     # Aufruf mit Index
@@ -348,7 +352,9 @@ def analyse_values(data, as_list=False, as_dict=False, sort=False, with_index=Tr
 # ==================================================================================================
 
 def analyse_cols(df, sort=False, with_index=True):
-    """ Liefert analyse_datatypes und analyse_values eines DataFrame
+    """ 
+    Describes the datatypes and the content of a DataFrame.
+    Merged info from analyse_datatypes and analyse_values.
     """   
         
     info1  = analyse_datatypes(df, with_index=with_index)
@@ -371,29 +377,30 @@ def analyse_cols(df, sort=False, with_index=True):
     
 
 # ersetzt analyse_nans und nan_anz
-def nnan(data, all=False, sum=False):
-    """ Für eine Serie:    Liefert die Anzahl der NaNs
-        Für ein DataFrame: Liefert eine Liste aller Felder und die Anzahl der NaNs 
-        * all: Sollen bei einem DataFrame auch die Felder ohne NaNs ausgegeben werden?
-        * sum: Soll   bei einem DataFrame nur die Gesamtsumme ausgegeben werden?
-          identisch mit nnan(df).sum()
+def nnan(data, all=False): #, sum=False):
+    """ 
+    Count NaNs in Series or DataFrames.          
+    For a DataFrame: Returns a list of all fields and the number of NaNs. 
+    For a Series:  Returns the number of NaNs.    
+    * all: Should the result include also the columns without NaNs (for a DataFrame)?
+    * sum: Should the result include only the total sum (for a DataFrame)? Identical with nnan(df).sum()          
     """
     result = data.isnull().sum()
     if isinstance(data, pd.Series) or all:
         return result
     
-    if not sum:
-        return result[result!=0]
-    return result.sum()
+    return result[result!=0]
+
   
     
 
 # ersetzt assert_no_nans    
 def any_nan(data, without=None):
-    """ Gibt es NaNs? Liefert True oder False.
-        Funktioniert für Series oder DataFrame.
-        assert not any_nan(df) stellt sicher, dass ein Dataframe keine NaNs enthält.
-        * without enthält ein Feldnamen oder eine Liste von Feldnamen, die ausgeschlossen werden
+    """ 
+    Are there NaNs? Returns True or False.
+    Works for Series or DataFrame.
+    assert not any_nan(df) ensures that a dataframe does not contain NaNs.
+    * without contains a field name or a list of field names that will be excluded.        
     """    
     if not without:
         return data.isnull().values.any()
@@ -404,14 +411,23 @@ def any_nan(data, without=None):
 
 
     
-# https://stackoverflow.com/questions/43831539/how-to-select-rows-with-nan-in-particular-column
 def nan_rows(df, col=''):   
-    """ Liefert die Zeilen eines Dataframes, die in der angegebenen Spalte NaN sind  
-        Wenn keine Spalte angegeben, wird die erste mit nans verwendet.
+    """ 
+    Returns the rows of a DataFrame that are NaN in the specified column.  
+    * col not specified: Returns all rows with NaNs in any column
+    * col=0:             Returns all rows with NaN in the FIRST column with NaNs. 
+    * col='city':        Returns all rows with NaNs in the column 'city'
     """
     
+    # no column specified: 
     if col=='':
+        return df[df.isna().any(axis=1)]
+    
+    # select the first column with NaNs
+    elif col==0:
         col = nnan(df).head(1).index.to_list()[0]
+    
+    # return rows
     mask = df[col].isnull()
     return df[mask]
     
@@ -432,64 +448,66 @@ def nan_rows(df, col=''):
 
 
 
+
+
 # ==============================================================================================
 # verteilung
 # ==============================================================================================
 
-def verteilung(series, style=None, quantile=1, stat=True):
-    '''
-    Veraltet. Verwende analyse_freqs stattdessen.
-    Liefert Informationen über die Verteilung einer Series
-    style:       ('key','top','plot')
-    quantile:  wird nur für den Plot verwendet und schneidet ihn ab
-    basiert auf seaborn für die grafische Darstellung bzw. auf countgrid für die textuelle Darstellung
-    Beispiel siehe Pandas/Analyse
-    '''
-    warnings.warn('Veraltet. Verwende analyse_freqs stattdessen.')
-    from matplotlib import pyplot as plt
-    
-    # Mini-Statistik
-    s = analyse_values(series, as_dict=True)
-    if stat:
-        print(s)   
-        print()
-    
-    # automatische style-Auswahl
-    if not style  and  is_string_dtype(series):
-        style = 'key'  
-    if not style  and  not s:
-        style = 'key'      
-    if not style  and  (int(s['nunique'])<=7):
-        style = 'key'   
-    if not style:  
-        style = 'top'         
-    
-    # textuell
-    if (style == 'key'): 
-        return countgrid(series, sort=False)
-    
-    # textuell
-    elif (style == 'top'): 
-        return countgrid(series, sort=True)    
-    
-    
-    # grafisch
-    else:
-        mask = (series <= series.quantile(quantile))   &   (series >= series.quantile(1-quantile)) 
-        try:
-            plt.figure(figsize=(16, 4))
-            return seaborn.histplot(series[mask])
-        except RuntimeError as re:
-            if str(re).startswith("Selected KDE bandwidth is 0. Cannot estimate density."):
-                return seaborn.histplot(series[mask], kde_kws={'bw': 0.1})
-            else:
-                raise re
-        except ValueError as error:
-            if str(error).startswith("could not convert string to float"):
-                plt.figure(figsize=(0, 0))
-                return countgrid(series, sort=True)    
-            else:
-                raise error        
+#def verteilung(series, style=None, quantile=1, stat=True):
+#    '''
+#    Veraltet. Verwende analyse_freqs stattdessen.
+#    Liefert Informationen über die Verteilung einer Series
+#    style:       ('key','top','plot')
+#    quantile:  wird nur für den Plot verwendet und schneidet ihn ab
+#    basiert auf seaborn für die grafische Darstellung bzw. auf countgrid für die textuelle Darstellung
+#    Beispiel siehe Pandas/Analyse
+#    '''
+#    warnings.warn('Veraltet. Verwende analyse_freqs stattdessen.')
+#    from matplotlib import pyplot as plt
+#    
+#    # Mini-Statistik
+#    s = analyse_values(series, as_dict=True)
+#    if stat:
+#        print(s)   
+#        print()
+#    
+#    # automatische style-Auswahl
+#    if not style  and  is_string_dtype(series):
+#        style = 'key'  
+#    if not style  and  not s:
+#        style = 'key'      
+#    if not style  and  (int(s['nunique'])<=7):
+#        style = 'key'   
+#    if not style:  
+#        style = 'top'         
+#    
+#    # textuell
+#    if (style == 'key'): 
+#        return countgrid(series, sort=False)
+#    
+#    # textuell
+#    elif (style == 'top'): 
+#        return countgrid(series, sort=True)    
+#    
+#    
+#    # grafisch
+#    else:
+#        mask = (series <= series.quantile(quantile))   &   (series >= series.quantile(1-quantile)) 
+#        try:
+#            plt.figure(figsize=(16, 4))
+#            return seaborn.histplot(series[mask])
+#        except RuntimeError as re:
+#            if str(re).startswith("Selected KDE bandwidth is 0. Cannot estimate density."):
+#                return seaborn.histplot(series[mask], kde_kws={'bw': 0.1})
+#            else:
+#                raise re
+#        except ValueError as error:
+#            if str(error).startswith("could not convert string to float"):
+#                plt.figure(figsize=(0, 0))
+#                return countgrid(series, sort=True)    
+#            else:
+#                raise error        
 
                 
                 
@@ -521,26 +539,34 @@ def histo(series, quantile=1):
 # war: top_beispiele
 # ==============================================================================================
 
-def analyse_freqs(dataframe, cols=None, limits=[], splits=[], sort_count=True ):
-    """ Häufigkeitsanalyse, die eine untergeordnete Häufigkeitsanalyse beinhaltet.
-        Liefert die wichtigsten Beispiele zu einer disjunkten Verteilung.
-    
-        * Für dataframe.cols wird eine Häufigkeitsverteilung erstellt 
-        * mit splits kann man z.B. auch Sätze zu Wörtern exploden
-        * mit split='' kann man den Zeichensatz bzw. die Zeichenhäufigkeiten ermitteln
+def analyse_freqs(data, cols=None, limits=[], splits=[], sort_count=True ):
+    """ 
+    Frequency analysis that includes a subordinate frequency analysis. 
+    Provides e.g. the most important examples per case. Splits strings and lists.
+    * cols:        Columns to which the analysis is to be applied. Name or list of names.
+                   If one of the addressed columns is a list, it is exploded.
+    * limits:      List of limits, corresponding to cols.
+                   Example: [None,5] does not limit the frequencies of the first col 
+                   but limits the data for the second col to the 5 most common values.
+    * splits:      List of split characters, corresponding to cols.
+                   Used to explode sentences into words
+    * sort_count:  True =>  result shows the most common contents first
+                   False => result is sorted by group
+    See the jupyter notebook for examples.
     """
     
     # generelle Fehler abfangen
-    if dataframe is None:
+    if data is None:
         return 'Nothing to analyze'
     
-    if isinstance(dataframe, pd.Series):   
-        dataframe = pd.DataFrame(dataframe)
-        return analyse_freqs( dataframe, dataframe.columns[0], limits=limits, splits=splits, sort_count=sort_count)
-    
-    if dataframe.shape[0] == 0:
-        return 'Keine Datensätze'
-    df = dataframe.copy()
+    if not isinstance(data, pd.DataFrame):  
+        data = dataframe(data, autotranspose=1)
+        data.columns = ['item']
+        return analyse_freqs( data, data.columns[0], limits=limits, splits=splits, sort_count=sort_count)
+
+    if data.shape[0] == 0:
+        return 'No rows'
+    df = data.copy()
     
     # Parameter cols 
     if type(cols) is str:
@@ -613,7 +639,9 @@ def analyse_freqs(dataframe, cols=None, limits=[], splits=[], sort_count=True ):
 
 
 def val_first_valid(series):
-    """ Liefert den ersten notna-Wert einer Series"""
+    """ 
+    Returns the first notna value of a series
+    """
     
     try:
         result = series.loc[series.first_valid_index()]
@@ -626,7 +654,9 @@ def val_first_valid(series):
 
 
 def val_last_valid(series):
-    """ Liefert den ersten notna-Wert einer Series"""
+    """
+    Returns the last notna value of a series
+    """
     try:
         result = series.loc[series.last_valid_index() ]
         if isinstance(result, pd.Series): # das liegt an nonunique Index
@@ -639,16 +669,20 @@ def val_last_valid(series):
 
     
 def val_most(series):    
-    """ Liefert den häufigsten Wert einer Series"""
+    """
+    Returns the most frequent value of a series
+    """
     mask = ~(series.isna().fillna(False))
     ohnenull = series[mask]   
     return ohnenull.value_counts().idxmax()
 
 
-# Sicher vor TypeError: unhashable type: 'list'
 # wird von analyse_cols verwendet.
 def nunique(series):
-    """Liefert die Anzahl der unterschiedlichen Werte"""
+    """
+    Returns the number of different values.
+    Safe from TypeError: unhashable type: 'list'.
+    """
     try:
         return series.nunique()
     except: 
@@ -658,8 +692,8 @@ def nunique(series):
 
 def ntypes(series):
     '''
-    Liefert die Anzahl der unterschiedlichen types. Untersucht dafür alle Werte der Series.
-    NaN-Werte werden nicht mitgezählt.
+    Returns the number of different types. Examines all values of the series.
+    NaN values are not counted.
     '''
     return series[series.notna()].map(type).nunique()
 
@@ -677,8 +711,9 @@ def ntypes(series):
 
 # sortiert die Spalten neu, vielfältigste Spalten zuerst 
 def sort_cols_by_nunique(df):
-    """Liefert das DataFrame mit umsortieren Spalten zurück.
-       Sortiert wird nach nunique.
+    """
+    Returns the DataFrame with reordered columns.
+    It is sorted by nunique.
     """
     spalten = list(analyse_values(df, sort=True, with_index=False).col_name)
     df = df.reindex(spalten, axis=1)
@@ -698,134 +733,59 @@ def sort_cols_by_nunique(df):
 # ==================================================================================================
 
 
-def sample(df, anz=10):
-    """ Liefert einige Beispielzeilen
-        Immer den Anfang und das Ende, plus einige zufällige Zeilen in der Mitte
-    """
-    if df.shape[0] <= anz:
+def sample(df, size=7):
+    ''' 
+    Returns some sample rows.
+    Always the beginning and the end, 
+    plus some random rows in the middle, prefering rows without NaNs.
+    * size: Number of rows returned
+    '''
+    if size <= 0:
+        return df.head(0)
+    if df.shape[0] <= size:
         return df
-    anz = int(anz / 3)
-    df1 =                df[  0   :  anz ]
-    df2 = sample_notnull(df[ anz  : -anz   ], anz+1)  
-    df3 =                df[ -anz :        ]  
-    result = pd.concat( [df1, df2, df3] ).sort_index()
-    #result = df1.append(df2).append(df3).sort_index()
+    anz = int(size / 3)
+    if anz <= 0:
+        anz = 1
+    df1 = df.head(anz) 
+    df2 = sample_notnull(df[ anz  : -anz ], anz+2)  
+    df3 = df.tail(anz) 
+    df2 = df2.head(size - df1.shape[0] - df3.shape[0]  )
+    result = pd.concat( [df1, df2, df3] ).head(size).sort_index()
     return result
 
-sample_10     = partial(sample, anz=10)    
-sample_20     = partial(sample, anz=20)   
-sample_100    = partial(sample, anz=100) 
-sample_1000   = partial(sample, anz=1000) 
-sample_10000  = partial(sample, anz=10000) 
-sample_100000 = partial(sample, anz=100000) 
+sample_10     = partial(sample, size=10)    
+sample_20     = partial(sample, size=20)   
+sample_100    = partial(sample, size=100) 
+sample_1000   = partial(sample, size=1000) 
+sample_10000  = partial(sample, size=10000) 
+sample_100000 = partial(sample, size=100000) 
 
 
 
-def sample_notnull(df, anz=6):
+def sample_notnull(df, size=6):
+    ''' 
+    Returns some sample rows. Prefers notnull rows if possible.
+    Always the beginning and the end, plus some random rows in the middle.
+    * size: Number of rows returned
+    '''    
     """ Liefert zufällige Beispielzeilen, bevorzugt dabei aber notnull-Zeilen
     """
-    df1 = df.sample(anz*10, replace=True).dropna()
-    df2 = df.sample(anz*10, replace=True).dropna(thresh=2)
-    df3 = df.sample(anz,    replace=True)
-    #result = df1.append(df2).append(df3)
+    if size <= 0:
+        return df.head(0)
+    if df.shape[0] <= size:
+        return df    
+    df1 = df.sample(size*10, replace=True).dropna()
+    df2 = df.sample(size*10, replace=True).dropna(thresh=2)
+    df3 = df.sample(size,    replace=True)
     result = pd.concat( [df1, df2, df3] )  
     result = result[~result.index.duplicated(keep='first')]
-    result = result.head(anz).sort_index()
+    result = result.head(size).sort_index()
     return result
 
 
 
        
-
-
-
-
-
-
-
-
-
-# ==============================================================================================
-# check_mask
-# ==============================================================================================
-
-def check_mask(df, mask, erwartungswert_min=-7777, erwartungswert_max=-7777, msg='', stop=True, verbose=None):
-    """ Prüft, wieviele Ergebnisse eine Maske erzielt.
-    
-        Beispiele:
-        ==========
-        check_mask( df, mask )         # gibt nur die Anzahl aus    
-        check_mask( df, mask, 0 )      # prüft auf genau 0 Datensätze    
-        check_mask( df, mask, 2000 )   # prüft auf ungefähr 2000 Datensätze       
-        check_mask( df, mask, 10, 50)  # prüft auf 10..50 Datensätze
- 
-        * erwartungswert_min muss nicht 0 sein, 0 geht immer, es sei denn erwartungswert_max ist 0
-        * msg wird als Text zusätzlich ausgegeben
-        
-        Beispiel ohne stop:
-        error = check_mask(df, mask, 214, stop=False)        
-        grid(df, mask, error)        
-        raise_if(error)
-    """
-    
-    def print_red(msg):
-        try:
-            msg = colored(msg, 'red', attrs=['reverse','bold'])
-        except:
-            pass   
-        print(msg)      
-    
-    if verbose is None:
-        verbose = Config.get('VERBOSE')      
-    
-    error = ''
-    
-    if msg:
-        msg = '{:<50s}'.format(msg)
-    
-    # erwartungswert_max fehlt
-    if (erwartungswert_max == -7777)  and (erwartungswert_min != -7777):
-        if erwartungswert_min == 0:
-            e_min = 0
-            e_max = 0
-        else:
-            e_min = int(erwartungswert_min * 0.5) # Verdoppelung oder Halbierung wird toleriert
-            e_max = int(erwartungswert_min * 2.0) + 1        
-        return check_mask(df, mask, e_min, e_max, msg=msg, stop=stop, verbose=verbose) 
-    
-    if type(mask) == pd.Series   or   type(mask) == np.ndarray:
-        anz_ds = df[mask].shape[0]
-    else:
-        anz_ds = df.shape[0]
-        
-    # erwartungswert_min fehlt
-    if erwartungswert_min == -7777:     
-        print(msg, "{0} Datensätze".format(anz_ds).strip()  )   
-        return
-    
-    # wurde vielleicht schon abgearbeitet?
-    if (anz_ds == 0)   and   (erwartungswert_min > 0) and verbose:
-        print_red(msg + " WARNUNG: {0} Datensätze, es sollten aber mindestens {1} sein".format(anz_ds, erwartungswert_min)  ) 
-        return 
-    
-    if anz_ds > erwartungswert_max:
-        error = " FEHLER: {0} Datensätze, es sollten aber maximal {1} sein".format(anz_ds, erwartungswert_max)  
-    elif (anz_ds < erwartungswert_min):
-        error = " FEHLER: {0} Datensätze, es sollten aber mindestens {1} sein".format(anz_ds, erwartungswert_min)     
-    else:
-        if verbose:
-            print(msg, "{0} Datensätze".format(anz_ds).strip()  )  
-        
-    #raise_later  
-    if (anz_ds > erwartungswert_max)  or (anz_ds < erwartungswert_min):
-        if stop:
-            raise Exception(  (msg + error).strip()  )
-            
-        else:
-            print_red(   (msg + error).strip()  )
-            return error.strip()
-    
-
 
 
 
@@ -835,7 +795,14 @@ def check_mask(df, mask, erwartungswert_min=-7777, erwartungswert_max=-7777, msg
 
 
 def analyse_groups(df, exclude=[], tiefe_max=3):
-    """ Komplettanalyse eines DataFrame auf Eindeutigkeit und Redundanz """
+    """
+    Analyses a DataFrame for uniqueness and redundancy.
+    Groups by many combinations of columns and counts the duplicates that are created in the process.
+    Interpretation:
+    0 dups => This combination of columns is unique
+    Same number of dups than other combination of columns => Indication of redundancy
+    
+    """
     #return analyse_groups_worker(df, exclude, tiefe_max)
     try:
         return analyse_groups_worker(df, exclude, tiefe_max)
@@ -847,78 +814,18 @@ def analyse_groups(df, exclude=[], tiefe_max=3):
 
 
     
-
-    
-    
 # ==================================================================================================
-# Vergleich zweier DataFrames
-# ==================================================================================================
-
-
-def check_identical(df1, df2, verbose=None):
-    '''
-    Sind zwei DataFrames inhaltlich identisch?
-    Dazu müssen sie:
-    * die gleiche shape besitzen
-    * die gleichen Spalten besitzen -- Reihenfolge ist aber egal
-    * die gleichen Zeilen besitzen  -- Reihenfolge ist aber egal
-    * Pro Spalte / Zeile den gleichen Inhalt besitzen
-    * datatypes müssen nicht gleich sein.
-    
-    '''
-    # Series
-    if isinstance(df1, pd.Series):   
-        df1 = pd.DataFrame(df1)  
-        df1.columns = ['A']
-        if not isinstance(df2, pd.Series):   
-            if verbose:
-                print('different datatype')
-            return False
-        else:
-            df2 = pd.DataFrame(df2)   
-            df2.columns = ['A']            
-            return check_identical(df1, df2, verbose=verbose)
-    
-    if verbose is None:
-        verbose = Config.get('VERBOSE')      
-    
-    # Unterschiedliche shape?
-    if df1.shape != df2.shape:
-        if verbose:
-            print('different shape')
-        return False
-    
-    # Unterschiedliche Spaltennamen?
-    if set(df1.columns) != set(df2.columns):
-        if verbose:
-            print('different columns')        
-        return False
-    
-    # Unterschiedliche Zeilenindizies?
-    if set(df1.index) != set(df2.index):
-        if verbose:
-            print('different index')        
-        return False    
-    
-    # Unterschiede in den Zellen finden
-    diff = get_different_rows(df1, df2)
-   
-    return diff.shape[0] == 0
-    
-
-
-    
-    
 # same_but_different
-# https://stackoverflow.com/questions/50583828/select-rows-with-same-id-but-different-values-in-pandas
-#   
+# ==================================================================================================
+
 def same_but_different(df, same, different, sort=True, return_mask=False):
-    """ Liefert die Zeilen eines DataFrame, die sich einerseits gleichen und andererseits verschieden sind:
-        Sie gleichen sich in den in same genannten Feldern.
-        Und sie unterscheiden sich im in different genannten Feld.
-        * same:      Array von Spaltennamen. Hiernach wird gruppiert.
-        * different: Einzelner Spaltenname.  Hier werden Unterschiede gesucht.
-        Nützlich ist das zur Analyse, ob Felder 100%ig miteinander korrelieren oder aber eigenständig sind.
+    """ 
+    Returns the rows of a DataFrame that are the same on the one hand and different on the other:
+    They are the same in the fields named in same.
+    And they differ in the field named in different.
+    This is useful for analysing whether fields correlate 100% with each other or are independent.
+    * same:       Array of column names.
+    * different:  Single column name.  This column is used to search for differences.
     """
     mask = df.groupby(same)[different].transform('nunique') > 1
     if return_mask:
@@ -926,63 +833,11 @@ def same_but_different(df, same, different, sort=True, return_mask=False):
     if sort:
         return df[mask].sort_values(same)
     return df[mask]    
-    
-    
-    
-# 
-# https://stackoverflow.com/questions/19917545/comparing-two-pandas-dataframes-for-differences
-# Returns just the rows from the new dataframe that differ from the source dataframe
-#
-def get_different_rows(df1, df2, indicator=True):
-    """ 
-    Liefert die Zeilen zweier Dataframes, die sich unterscheiden. 
-    Hilfreich für Kontrollzwecke.
-    Bei float kann es zu Fehlern kommen.
-    """
-    
-    # Spalten hashable machen
-    df1 = df1.copy()
-    df2    = df2.copy()  
-    
-    cols = col_names(df1, query='not is_hashable')
-    if cols:
-        df1[cols] = df1[cols].apply(lambda x: str(x))
-        
-    cols = col_names(df2, query='not is_hashable')  
-    if cols:
-        df2[cols]   = df2[cols].apply(lambda x: str(x))    
-    
- 
-    merged_df = df1.merge(df2, indicator=True, how='outer')
-    mask = (merged_df['_merge'] != 'both') 
-    result = merged_df[mask] # alle geänderten Zeilen
-    if not indicator:
-        result = result.drop('_merge', axis=1)
-    return result
-    
-    
-    #except: # datatypes vorher angleichen
-    #    df1 = change_datatype(df1, verbose=False)
-    #    df2    = change_datatype(df2,    verbose=False)        
-    #    merged_df = df1.merge(df2, indicator=True, how='outer')
-    #    mask = (merged_df['_merge'] != 'both') 
-    #    result = merged_df[mask] # alle geänderten Zeilen
-    #    if not indicator:
-    #        result = result.drop('_merge', axis=1)
-    #    return result      
-    #   
         
 
-
-
-
-
-
-
-
-
-
-
+    
+    
+    
 
 #################################################################################################
 # ...............................................................................................
@@ -997,15 +852,14 @@ def get_different_rows(df1, df2, indicator=True):
 # sort=False: in der Reihenfolge der Eingabedaten
 def countgrid( series, sort=True ):
     if series.shape[0] == 0:
-        warnings.warn('Keine Datensätze')
+        warnings.warn('No data')
         return 
     result = pd.DataFrame(   series.value_counts()   ).reset_index()
     countname   = series.name + '_count'
     percentname = series.name + '_percent'
     result.columns = [series.name, countname]
-    result[percentname] = scale(result[countname], typ='rel').round(3)*100
-    result['graph'] = (result[percentname] * 0.5).round(0).astype(int) 
-    result.graph = result.graph.apply( lambda x: x*'#')
+    result[percentname] = scale(result[countname], method='rel').round(3)*100 
+    result['graph'] = result[percentname].apply( lambda x: int(x*0.5)*'#')
     if sort:
         return reset_index(result.sort_values(countname, ascending=False))
     return reset_index(result.sort_values(series.name))
@@ -1025,7 +879,6 @@ def analyse_groups_worker(df, exclude=[], tiefe_max=3):
     
     # alle Teilmengen einer Menge
     # liefert list 
-    # https://qastack.com.de/programming/1482308/how-to-get-all-subsets-of-a-set-powerset
     from itertools import chain, combinations
     def powerlist(iterable, len_min=1, len_max=0):
         "powerlist('abcd',2, 2)  -->  [['a', 'b'], ['a', 'c'], ['a', 'd'], ['b', 'c'], ['b', 'd'], ['c', 'd']]"
@@ -1045,6 +898,8 @@ def analyse_groups_worker(df, exclude=[], tiefe_max=3):
     
     # Erst die Einerkombis, dann die Zweierkombis
     fertig = 0
+    menge_eindeutiger_cols = set()
+    
     for level in range(1,tiefe_max+1):
         
         if level > tiefe_max:
@@ -1055,38 +910,36 @@ def analyse_groups_worker(df, exclude=[], tiefe_max=3):
 
         # Einzelne Zeile
         for sp in spaltenkombis:
+            
+            # sinnlose Kombination?
+            p = len(set(sp).intersection(menge_eindeutiger_cols))
+            if p > 0:
+                continue
+                
             a = sp                                      # columns
             b = level                                   # level = group_size
-            c = df.duplicated(subset=sp)                # c.sum() ist dups_abs
-            d = hash(tuple(c))                          # hash
-            anfügen = (a, b, c.sum(), d )
-            #result_0 = pd.concat( [result_0, anfügen])  # alles anfügen
-            result_0.append( (a, b, c.sum(), d ) )     # alles anfügen            
+            c = df.duplicated(subset=sp).sum()          # dups_abs
+            if c == 0 and len(sp) == 1:
+                menge_eindeutiger_cols.add(sp[0]) 
+            anfügen = (a, b, c)
+            result_0.append( (a, b, c ) )         # alles anfügen            
+        
+        #print(menge_eindeutiger_cols)
         
         # Ergebnis aufbereiten
         result_1 = pd.DataFrame.from_records(result_0)
-        result_1.columns = ['columns','level','dups_abs','hash']
+        result_1.columns = ['columns','level','dups_abs']
         
         # vorzeitigen Abbruch vormerken, sobald es spaltenkombis ohne dups gibt
-        mask = (result_1.dups_abs == 0)
-        if result_1[mask].shape[0] > 0  and fertig==0:
+        if len(menge_eindeutiger_cols) > 0  and fertig==0:
             tiefe_max = level +1 # Level noch zuende machen
             fertig = 1
 
     
-    # Vollständiges Ergebnis endgültig aufbereiten
-    result_1 = reset_index(result_1.sort_values(['dups_abs','level'], ascending=[True,True,]))
-    result_1['dups_rel'] = result_1.dups_abs / df.shape[0] 
-    
-    # Sinnlose rauswerfen
-    result_1['rank'] = result_1.groupby('hash')['level'].rank('dense', ascending=True)
-    mask = (result_1['rank'] == 1)
-    result_1 = result_1[mask].copy()
-
-    result_1 = result_1.sort_values(['dups_abs'])
-    result_1 = drop_cols(result_1,['hash', 'rank'])
+    # Vollständiges Ergebnis endgültig aufbereiten    
+    result_1 = result_1.sort_values(['dups_abs','level'])
     result_1 = reset_index(result_1)
-    
+    result_1['dups_rel'] = result_1.dups_abs / df.shape[0]     
     return result_1
 
 

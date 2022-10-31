@@ -4,53 +4,28 @@ import collections, warnings
 import numpy  as np
 import pandas as pd
 
-from pandasklar.config       import Config
-
-#from pandasklar.analyse  import val_first_valid, val_last_valid
+from .config       import Config
 
 
-
-#
-#from functools   import partial  
-#
-
-
-#
-#
-#from pandas.api.types import is_string_dtype
-#from pandas.api.types import is_numeric_dtype
-#
-#
-#from pandasklar.pandas   import scale, drop_cols, rename_col, move_cols, reset_index, dataframe, group_and_agg
-#from pandasklar.pandas   import top_values, top_values_count
-#
-#
-#
-#try:
-#    import qgrid
-#except ImportError:
-#    print('qgrid nicht importierbar')
-#    
-    
 
 
 #################################################################################
 # ...............................................................................
-# Klasse type_info
+# Class type_info
 # ...............................................................................
 #################################################################################
     
 class type_info:
-    """ Liefert Informationen zu Pandas-Types und standardisiert diese.
-        Wird mit Irgendwas initialisiert, z.B. mit dem Namen einer Klasse, oder mit der Klasse selbst.
-        Oder, noch besser, mit einer Series.
-        Bsp.: i = type_info('Int32')     
-              i.info()          # liefert alle Attribute, darunter zum Beispiel:
-              i.class_object    # das Klassenobjekt
-              i.name            # der Name des Dtypes
-              i.name_instance   # type der Inhalte der Series
-              i.instance1       # ein Beispielexemplar, das nicht NaN ist
-    
+    """               
+    Provides information about pandas types and standardises them.
+    Is initialised with anything, e.g. with the name of a class, or with the class itself.
+    Or, even better, with a series.
+    Ex:   i = type_info('Int32')     
+          i.info()            # returns all attributes, including for example:
+          i.class_object      # the class object
+          i.name              # the name of the Dtype
+          i.name_instance     # type of the contents of the series
+          i.instance1         # an example instance that is not NaN              
     """
     
     def __init__(self, search):
@@ -158,7 +133,7 @@ class type_info:
 
         
     def info(self):
-        """ Liefert alle Attribute"""
+        """Returns all attributes"""
         result = dict(self.__dict__) # Kopie ziehen
         del result['search']
         return result

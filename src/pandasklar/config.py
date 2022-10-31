@@ -1,5 +1,5 @@
 
-# https://stackoverflow.com/questions/6198372/most-pythonic-way-to-provide-global-configuration-variables-in-config-py
+
 
 class Config:
     '''
@@ -22,10 +22,17 @@ class Config:
     def get(name):
         return Config.__conf[name]
 
+    
+    
     @staticmethod
     def set(name, value):
         if name in Config.__setters:
             Config.__conf[name] = value
-            print('Config set', name,'=', value)
+            
+            # verbose?
+            if Config.get('VERBOSE'):  
+                print( name,'=', value)
+                if name == 'VERBOSE':
+                    print( '--> setting verbose=True as default for all pandasklar functions\n' )
         else:
             raise NameError("Name not accepted in set() method")

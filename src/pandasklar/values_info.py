@@ -4,45 +4,8 @@ import pandas as pd
 
 from pandas.api.types import is_string_dtype, is_numeric_dtype
 
-from pandasklar.config       import Config
+from .config       import Config
 
-#import collections, warnings
-#
-#from functools   import partial  
-#
-
-#
-#
-#
-#
-#from pandasklar.pandas     import scale, drop_cols, rename_col, move_cols, reset_index, dataframe, group_and_agg
-#from pandasklar.pandas     import top_values, top_values_count
-#from pandasklar.type_info  import type_info
-#
-#
-#
-#try:
-#    import qgrid
-#except ImportError:
-#    print('qgrid nicht importierbar')
-#    
-    
-#import seaborn as sns
-#import matplotlib.pyplot as plt
-##sns.set()
-
-
-#try:
-#    import seaborn
-#except ImportError:
-#    print('seaborn nicht importierbar')  
-    
-
-
-#import locale 
-#locale.setlocale(locale.LC_ALL, '') 
-
-#from pandasklar.analyse  import type_info, values_info, val_first_valid
 
 
  
@@ -50,18 +13,21 @@ from pandasklar.config       import Config
     
 #############################################################################################
 # ...........................................................................................
-# Klasse values_info
+# Class values_info
 # ...........................................................................................
 #############################################################################################
-    
+  
+# this one returns a similar result:
+# df.agg([ 'count', 'nunique', 'min', 'max', nnan ]).transpose()    
+#
 class values_info:
-    """ Liefert Informationen zu den Werten in einer Series. 
-        Bsp.: i = values_info(series)     
-              i.info()          # liefert alle Attribute
-        übrigens liefert dieses hier ein ähnliches Ergebnis:
-        df.agg([ 'count', 'nunique', 'min', 'max', nnan ]).transpose()
-        * category_maxsize: Wie groß darf eine category werden, damit sie als datatype_suggest vorgeschlagen wird?
-        * nanless_ints: Werden Numpys Integerklassen (die kein NaN kennen) als datatype_suggest vorgeschlagen?            
+    """    
+    Provides information on the values in a series. 
+    Ex: i = values_info(series)     
+          i.info() # returns all attributes
+
+    * category_maxsize: How big can a category get to be suggested as datatype_suggest?
+    * nanless_ints: Are numpy's integer classes (that don't know NaN) suggested as datatype_suggest?     
     """
     
     def __init__(self, data, category_maxsize=-1, nanless_ints=False):
@@ -156,7 +122,7 @@ class values_info:
         
         
     def info(self):
-        """ Liefert alle Attribute"""
+        """Returns all attributes"""
         result = dict(self.__dict__) # Kopie ziehen
         #del result['data']
         return result    
