@@ -3,10 +3,10 @@
 
 [project]
 name            = "pandasklar"
-version         = "0.0.12"        
+version         = "0.0.14"        
 
 requires-python = ">=3.8"
-dependencies    = ['pandas','numpy','bpyth',]
+dependencies    = ['pandas','numpy','perlin_noise','seaborn','dtale','bpyth','blab',]
 
 authors        = [{ name = "djekra", email = "hopsalla@gmail.com" }]
 description     = "Various Pandas Tools"

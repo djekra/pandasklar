@@ -76,9 +76,24 @@ def scale(series, method, powerfactor=1, almostzero=0.00000001, verbose=None ):
     * scales randomly
     * generates an ugly, krank scaling for testings
     
-    '''
+    '''    
     if verbose is None:
-        verbose = Config.get('VERBOSE') 
+        verbose = Config.get('VERBOSE')      
+        
+    if np.isnan( series.min() ):
+        if verbose:
+            print('scale: series.min() is NaN')
+        return series
+    
+    if np.isnan( series.max() ):
+        if verbose:
+            print('scale: series.max() is NaN')
+        return series    
+    
+    # nnan merken
+    series_nnan = series.isnull().sum()  
+    if verbose and series_nnan > 0:
+        print('scale: series_nnan == ', series_nnan)    
         
     if method == 'rel': 
         summe = series.sum() 
@@ -156,6 +171,10 @@ def scale(series, method, powerfactor=1, almostzero=0.00000001, verbose=None ):
     elif method == 'random':
         result = series.copy()
         
+        # add
+        if result.abs().min() < almostzero  or  result.abs().max() < almostzero: 
+            result = result + random.uniform(-10, 10)          
+            
         # mult
         würfel = random.randint(1, 7)
         if würfel == 1:
@@ -173,27 +192,24 @@ def scale(series, method, powerfactor=1, almostzero=0.00000001, verbose=None ):
         elif würfel == 7:
             result = result * random.uniform(-0.001, 0.001)  
             
-        if result.min() == 0  or  result.max() == 0: 
-            result = result + random.uniform(-10, 10) 
-            
+        # spread
         diff = result.max() - result.min()
-        würfel = random.randint(1, 1)
+        p = 1       
+        if diff < 0.001  and  series_nnan==0:
+            p = random.uniform( 1, 4) 
+        elif diff < 0.01  and  series_nnan==0:
+            p = random.uniform( 1, 2)         
+        elif diff < 0.1  and  series_nnan==0:
+            p = random.uniform( 1, 1.5)               
+        if p != 1:
+            result_try = result ** p    
+            if series_nnan == result_try.isnull().sum()  :
+                result = result_try 
         
-        if diff < 0.001  and  würfel==1:
-            result = result ** random.uniform( 1, 4) 
-        elif diff < 0.01  and  würfel==1:
-            result = result ** random.uniform( 1, 2)  
-        elif diff < 0.1  and  würfel==1:
-            result = result ** random.uniform( 1, 1.5)      
-            
-        if result.min() == 0  or  result.max() == 0: 
-            result = result + random.uniform(-10, 10)             
-                
-        # again?
-        #if np.isnan( result.min() ):
-        #    return scale(series,'random')
-        #if np.isnan( result.max() ):
-        #    return scale(series,'random')        
+        # add again
+        if result.abs().min() < almostzero  or  result.abs().max() < almostzero: 
+            result = result + random.uniform(-0.1, 0.1)             
+                      
         return result
 
 

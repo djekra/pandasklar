@@ -10,7 +10,7 @@ except ImportError:
 ##seaborn.set()
     
 import matplotlib.pyplot as plt   
-import warnings
+import warnings, logging
 
 from .config   import Config
 from .pandas   import rename_col
@@ -40,7 +40,9 @@ def plot(   df1, df2=None, x='--', size=(16, 4), palette=('rainbow','tab10'), li
     '''   
     
     # filter findfont warnings
-    warnings.filterwarnings( 'ignore', module = 'findfont' )    
+    #warnings.filterwarnings( 'ignore', module = 'findfont' )  
+    
+    logging.getLogger('matplotlib.font_manager').disabled = True
     
     if isinstance(df1, pd.Series):
         df1 = pd.DataFrame(df1).reset_index()
