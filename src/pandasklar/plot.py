@@ -137,5 +137,29 @@ def plot(   df1, df2=None, x='--', size=(16, 4), palette=('rainbow','tab10'), li
     
                 
 
+        
+# ==============================================================================================
+# histo
+# ==============================================================================================
+        
+def histo(series, quantile=1):                
+    '''Histogramm'''
+    logging.getLogger('matplotlib.font_manager').disabled = True
+    mask = (series <= series.quantile(quantile))   &   (series >= series.quantile(1-quantile)) 
+    try:
+        plt.figure(figsize=(16, 4))
+        return seaborn.histplot(series[mask])
+    except RuntimeError as re:
+        if str(re).startswith("Selected KDE bandwidth is 0. Cannot estimate density."):
+            return seaborn.histplot(series[mask], kde_kws={'bw': 0.1})
+        else:
+            raise re
+    except ValueError as error:
+        if str(error).startswith("could not convert string to float"):
+            plt.figure(figsize=(0, 0))
+            return countgrid(series, sort=True)    
+        else:
+            raise error                        
+
 
 

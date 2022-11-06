@@ -29,6 +29,7 @@ Full dokumentation see `jupyter` directory.
 * `sample`: Returns some sample rows: beginning + end + random rows in the middle, prefering rows without NaNs
 * `search_str`: Searches all str columns of a dataframe. Useful for development and debugging.
 * `grid`: Visualize with dtale
+* `memory_consumption`: Returns the memory consumption of Python objects
 
 
 ## Analyse Datatypes
@@ -161,3 +162,8 @@ Full dokumentation see `jupyter` directory.
 * `implode_to_dict`: Reversal of explode_dict.<br>
   Groups rows and turns two columns (key, value) into one dict. 
 * `cols_to_dict`: Moves columns into a dict or defaultdict. 
+
+
+```python
+
+```

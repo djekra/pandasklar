@@ -512,23 +512,6 @@ def nan_rows(df, col=''):
                 
                 
                 
-def histo(series, quantile=1):                
-    '''Histogramm'''
-    mask = (series <= series.quantile(quantile))   &   (series >= series.quantile(1-quantile)) 
-    try:
-        plt.figure(figsize=(16, 4))
-        return seaborn.histplot(series[mask])
-    except RuntimeError as re:
-        if str(re).startswith("Selected KDE bandwidth is 0. Cannot estimate density."):
-            return seaborn.histplot(series[mask], kde_kws={'bw': 0.1})
-        else:
-            raise re
-    except ValueError as error:
-        if str(error).startswith("could not convert string to float"):
-            plt.figure(figsize=(0, 0))
-            return countgrid(series, sort=True)    
-        else:
-            raise error                        
 
                 
                 
@@ -945,7 +928,24 @@ def analyse_groups_worker(df, exclude=[], tiefe_max=3):
 
 
     
-
-
+def memory_consumption( iteration_of_objects, limit=10, use_rtype=True):
+    '''
+    Returns the memory consumption of Python objects.
+    * iteration_of_objects: can be e.g. a DataFrame or just locals()
+    * limit: Limits the output size
+    * use_rtype: Use rtype instead of type?
+    
+    For the memory consumption of the biggest 10 local variables call:
+    bpy.memory_consumption( locals() )
+    '''    
+    with warnings.catch_warnings():
+        warnings.simplefilter(action='ignore', category=FutureWarning)
+        result = bpy.memory_consumption( iteration_of_objects, limit=limit, use_rtype=use_rtype)
+        result = dataframe(result, verbose=False)
+        if use_rtype:
+            result.columns = ['name','rtype','size']
+        else:
+            result.columns = ['name','type','size']
+        return result
 
 
