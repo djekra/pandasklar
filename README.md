@@ -24,12 +24,13 @@ Full dokumentation see `jupyter` directory.
 
 
 ## Review and visualize
-* `plot`: Plot with seaborn without configuration
+* `plot`: Plot with seaborn without configuration.
 * `check_mask`: Count rows filtered by a binary mask. Raises an error, if the number is unexpected.
-* `sample`: Returns some sample rows: beginning + end + random rows in the middle, prefering rows without NaNs
+* `specials`: Returns rows representing all special values per column.
+* `sample`: Returns some sample rows: beginning + end + specials + random rows.
 * `search_str`: Searches all str columns of a dataframe. Useful for development and debugging.
-* `grid`: Visualize with dtale
-* `memory_consumption`: Returns the memory consumption of Python objects
+* `grid`: Visualize with dtale.
+* `memory_consumption`: Returns the memory consumption of Python objects.
 
 
 ## Analyse Datatypes
@@ -63,6 +64,7 @@ Full dokumentation see `jupyter` directory.
 * `move_cols`: Reorders the columns of a DataFrame. The specified columns are moved to a numerical position or behind a named column.
 * `rename_col`: Renames a column of a DataFrame. If you try to rename a column again, no error is thrown (better for the workflow in jupyter notebooks).
 * `col_names`: Selects column names based on analyse_cols. Useful to apply a method to specific columns of a DataFrame.
+* `write_empty_col`: Writes empty iterables into a column.
 
 
 ## Manage rows
@@ -139,12 +141,17 @@ Full dokumentation see `jupyter` directory.
    Like Series.mode, but always returns a scalar.
 * `top_values`: Aggregates a Series to a list of the most frequent elements.<br>
    Can also return the counts of the most frequent elements.  
+   
+* `first_valid_value`: Returns the first not-nan values of a Series.    
+* `last_valid_value`:  Returns the last  not-nan values of a Series.      
+
 * `agg_words`: Aggregates a Series of strings to a long string.<br>
    A space is always placed between the elements, the order is preserved.
 * `agg_words_nodup`: Aggregates a Series of strings (e.g. signal words) to a long string.
    Like agg_words, but duplicates are removed.
 * `agg_strings_nospace`: Aggregates a Series of strings into one long string.<br>
-   Like agg_words, but no separators between the substrings.   
+   Like agg_words, but no separators between the substrings.  
+   
 * `agg_to_list`: Aggregates a Series to a list. 
    Normally this can also be done with a simple 'list', 
    but in combination with transform this does not work.
@@ -153,7 +160,7 @@ Full dokumentation see `jupyter` directory.
    If a key occurs more than once, the value is overwritten.
 * `agg_dicts_2dd`: Aggregates a Series of dicts to a single defaultdict(list).<br>
    I.e. multiple keys are allowed. The values are always lists. 
-* `agg_defaultdicts`: Aggregates a Series of defaultdict(list) to a single defaultdict(list). 
+* `agg_defaultdicts`: Aggregates a Series of defaultdict(list) to a single defaultdict(list).
 
 
 ## Explode and Implode Dictionaries

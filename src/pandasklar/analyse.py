@@ -14,9 +14,10 @@ from .type_info    import type_info
 from .values_info  import values_info
 
 from .config       import Config
-from .pandas       import dataframe, reset_index, drop_cols, rename_col, move_cols 
-from .aggregate    import group_and_agg, top_values, top_values_count
+from .pandas       import dataframe, reset_index, drop_cols, rename_col, move_cols, quicksample, first_valid_value, last_valid_value
+from .aggregate    import group_and_agg, top_values, top_values_count, most_freq_elt
 from .scale        import scale
+from .rank         import rank_without_group
 
 
     
@@ -46,7 +47,7 @@ except ImportError:
 # ==================================================================================================
 # 
 #
-def load_pickle( filename, resetindex='AUTO', changedatatype=False, verbose=False ): 
+def load_pickle( filename, resetindex='AUTO', changedatatype=False, verbose=None ): 
     '''
     Convenient function to load a DataFrame from pickle file.
     Optional optimisation of datatypes. Verbose if wanted.
@@ -56,41 +57,40 @@ def load_pickle( filename, resetindex='AUTO', changedatatype=False, verbose=Fals
     changedatatype:       Should the datatypes get optimized?
     verbose:              True if messages are wanted.
     '''
+    
+    if verbose is None:
+        verbose = Config.get('VERBOSE')  
+        
     result = bpy.load_pickle(filename)
     if resetindex == True:
         result = result.reset_index()
-        if verbose:
-            print('reset_index')
     elif resetindex == 'AUTO':
-        result = result.reset_index()
-        if verbose:
-            print('reset_index')       
-        result = drop_cols(result, 'index') 
-        if verbose:
-            print('drop_col index')        
-    else:
-        if verbose:
-            print('no reset_index')        
-    if changedatatype:
-        if verbose:        
-            print('change_datatype')         
+        result = result.reset_index()    
+        result = drop_cols(result, 'index')       
+    
+    if changedatatype:     
         result = change_datatype(result, verbose=verbose)
 
+    if verbose:
+        print(result.shape[0], 'rows loaded')  
+        
     return result
 
 
 
 
-def dump_pickle( df, filename, changedatatype=True, verbose=False ): 
+def dump_pickle( df, filename, changedatatype=True, verbose=None ): 
     '''
     Convenient function to save a DataFrame to a pickle file.
     Optional optimisation of datatypes. Verbose if wanted.
     changedatatype:       Should the datatypes get optimized?
     verbose:              True if messages are wanted.    
     '''
-    if changedatatype:
-        if verbose:        
-            print('change_datatype')         
+    
+    if verbose is None:
+        verbose = Config.get('VERBOSE')  
+        
+    if changedatatype:       
         df = change_datatype(df, verbose=False)
     bpy.dump_pickle(df,filename)
 
@@ -157,7 +157,11 @@ def analyse_datatypes(df, with_index=True):
     Returns info about the datatypes and the mem_usage of the columns of a DataFrame.  
     """
     if isinstance(df, pd.Series): 
-        return dataframe(analyse_datatype(df), verbose=False)    
+        return dataframe( analyse_datatype(df), verbose=False ) 
+    
+    # Kleine Probe reicht
+    if df.shape[0] > 10:
+        return analyse_datatypes(quicksample(df, 10), with_index=with_index)
     
     data  = [] 
     if with_index:
@@ -549,7 +553,6 @@ def analyse_freqs(data, cols=None, limits=[], splits=[], sort_count=True ):
 
     if data.shape[0] == 0:
         return 'No rows'
-    df = data.copy()
     
     # Parameter cols 
     if type(cols) is str:
@@ -574,12 +577,16 @@ def analyse_freqs(data, cols=None, limits=[], splits=[], sort_count=True ):
         splits += [None] * (len(cols)-len(splits)) 
     #print('splits',splits)
     
+    # sortieren
+    df = data.copy()
+    #df = reset_index(data, keep_as='__afxidx').sort_values(cols + ['__afxidx']).reset_index(drop=True) 
+    
     # splits realisieren
     for i, col in enumerate(cols):
         
         # Sätze zu Wortlisten
-        if (splits[i] or splits[i]=='') and col:
-            df.loc[:,col] = df[col].str.split(splits[i])    
+        if (splits[i] or splits[i]=='') and col:         
+            df[col] = df[col].str.split(splits[i])    
     
         # Soll nach einem list-Feld gruppiert werden?
         if i == 0 and analyse_datatype(df[col])['datatype_instance'] in ['list']:
@@ -621,33 +628,33 @@ def analyse_freqs(data, cols=None, limits=[], splits=[], sort_count=True ):
 # ==============================================================================================
 
 
-def val_first_valid(series):
-    """ 
-    Returns the first notna value of a series
-    """
-    
-    try:
-        result = series.loc[series.first_valid_index()]
-        if isinstance(result, pd.Series): # das liegt an nonunique Index
-            return result.iloc[0]
-        else:
-            return result
-    except:
-        return None
-
-
-def val_last_valid(series):
-    """
-    Returns the last notna value of a series
-    """
-    try:
-        result = series.loc[series.last_valid_index() ]
-        if isinstance(result, pd.Series): # das liegt an nonunique Index
-            return result.iloc[-1]
-        else:
-            return result        
-    except:
-        return None
+#def val_first_valid(series):
+#    """ 
+#    Returns the first notna value of a series
+#    """
+#    
+#    try:
+#        result = series.loc[series.first_valid_index()]
+#        if isinstance(result, pd.Series): # das liegt an nonunique Index
+#            return result.iloc[0]
+#        else:
+#            return result
+#    except:
+#        return None
+#
+#
+#def val_last_valid(series):
+#    """
+#    Returns the last notna value of a series
+#    """
+#    try:
+#        result = series.loc[series.last_valid_index() ]
+#        if isinstance(result, pd.Series): # das liegt an nonunique Index
+#            return result.iloc[-1]
+#        else:
+#            return result        
+#    except:
+#        return None
 
 
     
@@ -693,82 +700,32 @@ def ntypes(series):
 
 
 # sortiert die Spalten neu, vielfältigste Spalten zuerst 
-def sort_cols_by_nunique(df):
+def sort_cols_by_nunique(df, inaccurate_limit=100000):
     """
     Returns the DataFrame with reordered columns.
     It is sorted by nunique.
+    * inaccurate_limit: If the dataframe is bigger than this, take a sample of this size
     """
-    spalten = list(analyse_values(df, sort=True, with_index=False).col_name)
-    df = df.reindex(spalten, axis=1)
+    
+    
+    if df.shape[0] > inaccurate_limit:
+        return sort_cols_by_nunique(quicksample(df, inaccurate_limit))
+    
+    spaltendict = dict()
+    for col in df.columns:
+        try:
+            spaltendict[col] = df[col].nunique()
+        except:
+            spaltendict[col] = -1
+            
+    # sortieren
+    spaltendict = {k: v for k, v in sorted(  spaltendict.items(), key=lambda item: item[1], reverse=True   )}
+
+    #spalten = list(analyse_values(df, sort=True, with_index=False).col_name)
+    df = df.reindex(spaltendict.keys(), axis=1)
     return df
 
 
-
-
-
-
-
-
-
-
-# ==================================================================================================
-# sample
-# ==================================================================================================
-
-
-def sample(df, size=7):
-    ''' 
-    Returns some sample rows.
-    Always the beginning and the end, 
-    plus some random rows in the middle, prefering rows without NaNs.
-    * size: Number of rows returned
-    '''
-    if size <= 0:
-        return df.head(0)
-    if df.shape[0] <= size:
-        return df
-    anz = int(size / 3)
-    if anz <= 0:
-        anz = 1
-    df1 = df.head(anz) 
-    df2 = sample_notnull(df[ anz  : -anz ], anz+2)  
-    df3 = df.tail(anz) 
-    df2 = df2.head(size - df1.shape[0] - df3.shape[0]  )
-    result = pd.concat( [df1, df2, df3] ).head(size).sort_index()
-    return result
-
-sample_10     = partial(sample, size=10)    
-sample_20     = partial(sample, size=20)   
-sample_100    = partial(sample, size=100) 
-sample_1000   = partial(sample, size=1000) 
-sample_10000  = partial(sample, size=10000) 
-sample_100000 = partial(sample, size=100000) 
-
-
-
-def sample_notnull(df, size=6):
-    ''' 
-    Returns some sample rows. Prefers notnull rows if possible.
-    Always the beginning and the end, plus some random rows in the middle.
-    * size: Number of rows returned
-    '''    
-    """ Liefert zufällige Beispielzeilen, bevorzugt dabei aber notnull-Zeilen
-    """
-    if size <= 0:
-        return df.head(0)
-    if df.shape[0] <= size:
-        return df    
-    df1 = df.sample(size*10, replace=True).dropna()
-    df2 = df.sample(size*10, replace=True).dropna(thresh=2)
-    df3 = df.sample(size,    replace=True)
-    result = pd.concat( [df1, df2, df3] )  
-    result = result[~result.index.duplicated(keep='first')]
-    result = result.head(size).sort_index()
-    return result
-
-
-
-       
 
 
 

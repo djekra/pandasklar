@@ -4,7 +4,8 @@ import collections, warnings
 import numpy  as np
 import pandas as pd
 
-from .config       import Config
+from .config    import Config
+from .pandas    import first_valid_value, last_valid_value
 
 
 
@@ -30,14 +31,14 @@ class type_info:
     
     def __init__(self, search):
         
-        from pandasklar.analyse  import val_first_valid, val_last_valid
+        #from pandasklar.analyse  import val_first_valid, val_last_valid
         
         # Beispielinstanzen
         self.instance1 = None
         self.instance2 = None
         if isinstance(search, pd.Series): # Es wurde eine Series übergeben
-            self.instance1 = val_first_valid(search)
-            self.instance2 = val_last_valid(search)     
+            self.instance1 = first_valid_value(search)
+            self.instance2 = last_valid_value(search)     
             search = str(search.dtype)
         elif not isinstance(search, str): # Es wurde eine Klasse übergeben
             search = str(search)
@@ -86,7 +87,11 @@ class type_info:
             
         elif self.name_short.startswith( 'float' ):
             self.name_long  = 'np.' + self.name_short    
-            self.framework  = 'np'              
+            self.framework  = 'np'     
+            
+        elif self.name_short.startswith( 'Float' ):
+            self.name_long = 'pd.' + self.name_short + 'Dtype'  
+            self.framework = 'pd'                 
             
         elif self.name_short.startswith( 'Int' ):
             self.name_long = 'pd.' + self.name_short + 'Dtype'  

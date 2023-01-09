@@ -57,9 +57,10 @@ class values_info:
                 self.vmedian = np.NaN
                 
         else: 
+            data_dropna = data.dropna()
             try:
-                self.vmin    = (data.min())
-                self.vmax    = (data.max())
+                self.vmin    = data_dropna.min()
+                self.vmax    = data_dropna.max()
             except:
                 self.vmin    = np.NaN
                 self.vmax    = np.NaN                

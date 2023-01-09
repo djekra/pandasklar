@@ -168,7 +168,7 @@ def grid( df, mask=None, error='€€€', color='blue', **kwargs ):
     '''
     Visualization of a DataFrame using dtale.
     * df:     DataFrame to show
-    * mask:   Binary mask of function to reduce the number of rows
+    * mask:   Binary mask, function or Searchstring to reduce the number of rows
     * error:  Error message
     * color:  Color of the error message.
     * kwargs: Options for dtale. See https://github.com/man-group/dtale#instance-settings
@@ -204,10 +204,12 @@ def grid( df, mask=None, error='€€€', color='blue', **kwargs ):
         return
     
     # verschiedene mask behandeln
-    if type(mask) == pd.Series   or   type(mask) == np.ndarray:
+    if isinstance(mask, pd.Series)  or  isinstance(mask, np.ndarray):
         df_show = df[mask]
     elif callable(mask):   
         df_show = mask(df)
+    elif isinstance(mask, str):
+        df_show = search_str(df, mask)
     else:
         df_show = df
         
@@ -222,7 +224,9 @@ def grid( df, mask=None, error='€€€', color='blue', **kwargs ):
     #global_state.set_app_settings( kwargs)  
     
     #set_grid(**kwargs)
-    widget = dtale.show(df_show,**kwargs) # funktioniert nicht für alle options. Z.B. nicht für max_column_width
+    with warnings.catch_warnings():
+        warnings.simplefilter(action='ignore', category=FutureWarning)    
+        widget = dtale.show(df_show,**kwargs) # funktioniert nicht für alle options. Z.B. nicht für max_column_width
     #reset_grid()
     #widget = dtale.show(df_show)   
 

@@ -18,7 +18,7 @@ def compare_series(s, t, format='dict'):
     Compares the content of two Series.
     Returns several indicators of equality as dict or DataFrame:
         name:    same name    
-        dtype:   same dtype
+        dtype:   nearly same dtype (Float32 == Float64)
         len:     same shape        
         nnan:    same number of NaNs   
         content: same content, ignoring index and sort
@@ -62,7 +62,9 @@ def compare_series(s, t, format='dict'):
 
         # dtype 
         if s.dtype == t.dtype:
-            result['dtype'] = True             
+            result['dtype'] = True   
+        elif str(s.dtype) in ['Float64','Float32']  and  str(t.dtype) in ['Float64','Float32']:
+            result['dtype'] = True               
 
         if result['len']  and  result['nnan'] :
 

@@ -3,13 +3,13 @@
 
 [project]
 name            = "pandasklar"
-version         = "0.1.0"        
+version         = "0.1.2"    #up!     
 
 requires-python = ">=3.8"
 dependencies    = ['pandas','numpy','perlin_noise','seaborn','dtale','bpyth','blab',]
 
 authors        = [{ name = "djekra", email = "hopsalla@gmail.com" }]
-description     = "Various Pandas Tools"
+description     = "Toolbox / Ecosystem for data science. Easier handling of pandas, especially when thinking in SQL."
 readme          = "README.md"
 license         = {text = "MIT"}
 classifiers     = [

@@ -167,6 +167,8 @@ def rename_col(df, name_from, name_to):
     Renames a column of a DataFrame.
     If you try to rename a column again, no error is thrown (better for the workflow in jupyter notebooks).
     '''
+    if name_from == name_to:
+        return df
     if (name_to in df.columns) and (not name_from in df.columns):
         return df # if you try to rename a column again, no error is thrown.
     if name_to in df.columns:
@@ -237,11 +239,11 @@ def update_col(df_to, df_from, on=[], left_on=[], right_on=[], col='', col_renam
     col:        Name of the column to be transmitted. Must exist in df_from. 
                 If not present in df_to, it will be appended. 
                 If already present, matching values will be overwritten.
-    col_rename: New name for col, if specified.        
+    col_rename: New name for col, if specified. If already present, matching values will be overwritten and not matching values are preserved.      
     func:       Name of the function used for dup avoidance. E.g. 'max'. If empty: No dup avoidance
     cond:       Empty, 'min','max' or 'null'. 
                 'min','max': Only write if the new value is smaller / larger than the existing value
-                'null'     : Only write if there is no existing value in df_to
+                'null'     : Only write if there is no existing value in df_to (it's Null or empty string) 
     keep:       Should the original value be kept in a separate column? 
                 The string keep is used as suffix for this column.
                 NaN if record is unchanged!  
@@ -290,10 +292,7 @@ def update_col(df_to, df_from, on=[], left_on=[], right_on=[], col='', col_renam
     
     # umbenennen wie left bzw. df_to
     df_from.columns = left_on+[col_rename]
-    
-    # copy_datatype (ja, das ist richtig rum)
-    df_from = copy_datatype(df_from, df_to)
-    
+        
     # Index merken
     df_to = df_to.copy()
     df_to['copy_index'] = df_to.index
@@ -310,7 +309,8 @@ def update_col(df_to, df_from, on=[], left_on=[], right_on=[], col='', col_renam
     if keep:
         result[col_rename+keep] = result[col_rename]  
     
-    if col_rename in df_to.columns: # oder wenn die Zielspalte überhaupt existiert. 
+    # Zielspalte existiert schon
+    if col_rename in df_to.columns: 
         col_new = col_rename + '_new'
         # result[col_rename] ist der alte Wert
         # result[col_new]    ist der neue Wert        
@@ -319,13 +319,23 @@ def update_col(df_to, df_from, on=[], left_on=[], right_on=[], col='', col_renam
         elif cond == 'max':
             mask = result[col_new].notnull()   &   (result[col_new] > result[col_rename]) 
         elif cond == 'null':
-            mask = result[col_new].notnull()   &   result[col_rename].isnull()            
+            mask = result[col_new].notnull()   &   (  result[col_rename].isnull()   |   (result[col_rename]=='')   )        
         else:         
             mask = result[col_new].notnull() 
         if verbose:
-            print(result[mask].shape[0], 'cells written')
-        result.loc[mask, col_rename] = result.loc[mask, col_new]
+            print(result[mask].shape[0], 'cells written into existing column')
+        with warnings.catch_warnings():
+            warnings.simplefilter(action='ignore', category=FutureWarning)   
+            result.loc[mask, col_rename] = result.loc[mask, col_new]
+        result = copy_datatype( result, df_to )    # datatypes restaurieren               
+        #result[col_rename] = copy_datatype( result[col_rename], df_to[col_rename] )    # datatype restaurieren
         result = drop_cols(result,[col_new])
+    
+    # Die Spalte ist neu
+    else:
+        #print(list(df_from.columns))
+        result             = copy_datatype( result,             df_to        )           # datatypes restaurieren        
+        result[col_rename] = copy_datatype( result[col_rename], df_from[col_rename] )    # datatype übernehmen        
     
     if keep:
         mask = result[col_rename+keep] == result[col_rename]
@@ -337,6 +347,32 @@ def update_col(df_to, df_from, on=[], left_on=[], right_on=[], col='', col_renam
         
     return result
 
+    
+    
+def write_empty_col(df,col_name, content):
+    '''
+    Writes empty iterables into a column and sets datatype.
+    * content: Can be 'list','set','dict','defaultdict', 'string' or any empty iterable.
+    Example: write_empty_col(df,'mycol','list') writes empty lists in mycol.
+    '''
+    result = df.copy()
+    if content == 'string':
+        result[col_name] = ''
+        result[col_name] = result[col_name].astype('string')      
+        return result
+    if content == 'list':
+        content = list()
+    elif content == 'set':
+        content = set()     
+    elif content == 'dict':
+        content = dict()   
+    elif content == 'defaultdict':
+        content = defaultdict(list)
+
+    result[col_name] = [ content for x in range(len(df.index))]
+    result[col_name] = result[col_name].astype('object')
+    return result   
+    
     
     
 def copy_datatype(data_to, data_from):
@@ -501,6 +537,7 @@ def drop_rows(df, mask, verbose=None):
     '''
     Drops rows identified by a binary mask.
     * verbose: True if you want to print how many rows are droped.
+    (If you want to delete the rows to a trash, use move_rows.)
     '''
 
     if verbose is None:
@@ -549,7 +586,7 @@ def move_rows(df_from, df_to=None, mask=None, msg='', msgcol='msg', verbose=None
         verbose = Config.get('VERBOSE') 
         
     if not isinstance(df_from, pd.DataFrame):
-        raise ValueError('df_from must be a DataFrame') 
+        raise ValueError('df_from must be a DataFrame')         
         
     # df_to enthält mask    
     if isinstance(df_to, pd.Series):
@@ -560,7 +597,7 @@ def move_rows(df_from, df_to=None, mask=None, msg='', msgcol='msg', verbose=None
     if not df_to is None:
         zähler[0]+=1   
     if msg=='': 
-        msg = zähler[0]        
+        msg = str(zähler[0])        
         
     # damit die Negation funktioniert
     try:
@@ -588,10 +625,11 @@ def move_rows(df_from, df_to=None, mask=None, msg='', msgcol='msg', verbose=None
     if not df_to is None:     
         t = df_from[mask].copy()
         if msgcol and not msg is None:        
-            t[msgcol] = msg  # kennzeichnen          
+            t[msgcol] = msg  # kennzeichnen   
+            t[msgcol] = t[msgcol].astype('string')
         r1 = df_from[~mask].copy()
         r2 = pd.concat([df_to, t])
-        # r2 = add_rows(df_to,t)
+        r2 = copy_datatype(r2, r1)    # falls neue Spalten dazugekommen sind         
         return r1, r2   
     
     # Löschen mit neuem trash    
@@ -599,6 +637,7 @@ def move_rows(df_from, df_to=None, mask=None, msg='', msgcol='msg', verbose=None
         t = df_from[mask].copy()
         if msgcol and not msg is None:
             t[msgcol] = msg # kennzeichnen  
+            t[msgcol] = t[msgcol].astype('string')
         return df_from[~mask].copy() , t
         
     return "ERROR"            
@@ -612,18 +651,19 @@ def move_rows(df_from, df_to=None, mask=None, msg='', msgcol='msg', verbose=None
 
 
 
-def add_rows(df_main, df_add, only_new=None, reindex=False, verbose=None):
+def add_rows(df_main, df_add, only_new=None, reindex=True, assert_subset=False, verbose=None):
     '''
     Like concat, with additional features only_new and verbose.
-    * df_main:  The new rows are added to the end of this dataframe.
-    * df_add:   Rows to add. The dtypes are adapted to those of df_main.
-                Series or list are also accepted for appending.
-    * only_new: Avoid duplicates by setting this to a list of column names.
-                This combination must contain new content.
-                A single column name as string works the same way.
-                Or set only_new=True, this will avoid duplicate row indexes.
-    * reindex:  Will the result get a fresh index without dups?
-    * verbose:  Print status messages how many rows affected
+    * df_main:       The new rows are added to the end of this dataframe.
+    * df_add:        Rows to add. The dtypes are adapted to those of df_main.
+                     Series or list are also accepted for appending.
+    * only_new:      Avoid duplicates by setting this to a list of column names.
+                     This combination must contain new content.
+                     A single column name as string works the same way.
+                     Or set only_new=True, this will avoid duplicate row indexes.
+    * reindex:       Will the result get a fresh index without dups?
+    * assert_subset: Check if all columns in df_add exist in df_main already?
+    * verbose:       Print status messages how many rows affected
     '''
     
     if not type(df_main) is pd.DataFrame:
@@ -633,7 +673,10 @@ def add_rows(df_main, df_add, only_new=None, reindex=False, verbose=None):
         df_add = dataframe(df_add, verbose=False)
     
     if verbose is None:
-        verbose = Config.get('VERBOSE')      
+        verbose = Config.get('VERBOSE')   
+        
+    if assert_subset: 
+        assert set(df_add.columns) <= set(df_main.columns)        
     
     # only_new
     if only_new:
@@ -662,14 +705,98 @@ def add_rows(df_main, df_add, only_new=None, reindex=False, verbose=None):
     df_add = copy_datatype(df_add, df_main)     
     
     # result  
-    result = pd.concat([df_main, df_add], ignore_index=reindex) 
+    with warnings.catch_warnings():
+        warnings.simplefilter(action='ignore', category=FutureWarning)     
+        result = pd.concat([df_main, df_add], ignore_index=reindex) 
     
     # Statusmeldung
     if verbose:
-        print(df_add.shape[0], 'rows added, now a total of', result.shape[0])
+        if result.index.is_unique:        
+            print(df_add.shape[0], 'rows added, now a total of', result.shape[0])
+        else:
+            print(df_add.shape[0], 'rows added, now a total of', result.shape[0], 'Warning: Index is not unique!')            
+
+            
     
     return result
 
+
+
+def quicksample(data, size):
+    '''
+    Returns a subset of the input with the given size,
+    including the first and the last rows.
+    Works with DataFrame or Series.
+    '''
+    if size <= 1:
+        return data.head(size)
+    if data.shape[0] <= size:
+        return data    
+
+    if size == 2:
+        with warnings.catch_warnings():
+            warnings.simplefilter(action='ignore', category=FutureWarning)   
+            result = pd.concat( [data.head(1),data.tail(1)] )
+        return result
+    
+    if size < 10:
+        n = 1
+    elif size < 100:
+        n = 2        
+    else:
+        n = 3        
+    r1 = data.head(n)
+    r2 = data.iloc[n:-n].sample(size-n-n)
+    r3 = data.tail(n)    
+    with warnings.catch_warnings():
+        warnings.simplefilter(action='ignore', category=FutureWarning)      
+        result = pd.concat([r1,r2,r3])
+    return result 
+
+
+    
+
+
+# ==================================================================================================
+# first_valid_value und last_valid_value
+# ==================================================================================================
+ 
+
+    
+def first_valid_value(series):
+    '''
+    Returns the first not-nan values of a Series. 
+    '''
+    try:
+        idx = series.first_valid_index()
+        if idx is None:
+            return None
+        result = series.loc[idx]
+        if isinstance(result, pd.Series): # das liegt an nonunique Index
+            return result.iloc[0]
+        else:
+            return result    
+    except:
+        return None        
+    
+
+
+def last_valid_value(series):
+    '''
+    Returns the last not-nan values of a Series. 
+    '''    
+    try:
+        idx = series.last_valid_index()
+        if idx is None:
+            return None
+        result = series.loc[idx]
+        if isinstance(result, pd.Series): # das liegt an nonunique Index
+            return result.iloc[-1]
+        else:
+            return result    
+    except:
+        return None     
+    
 
 
 
@@ -693,8 +820,7 @@ def find_in_list( df, col_list_of_strings, searchstring ):
 
 
 
-# war: filter_lists
-# 
+
 def apply_on_elements(series, funktion):
     '''
     Applies a function to all elements of a Series of lists.

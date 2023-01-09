@@ -8,9 +8,9 @@ import bpyth  as bpy
    
 from collections import Counter, defaultdict 
 
-from .config   import Config
-from .pandas   import dataframe, reset_index, drop_cols, rename_col, move_cols, drop_multiindex
-
+from .config     import Config
+from .pandas     import dataframe, reset_index, drop_cols, rename_col, move_cols, drop_multiindex, quicksample
+from .type_info  import type_info
 
 
 ###############################################################################################
@@ -104,21 +104,41 @@ def group_and_agg(df, col_origins, col_funcs=None, col_names=None, dropna=True, 
 
 
 
-def most_freq_elt(series):  
+def most_freq_elt(series, inaccurate_limit=(10000,1000) ):  
     '''
     Aggregates a Series to the most frequent scalar element.
     Like Series.mode, but always returns a scalar.
-    If two elements are equally frequent, just any one is returned 
+    If two elements are equally frequent, just any one is returned .
+    * inaccurate_limit: If the data is bigger than this, examine take a sample of this size.
+      The first value is for hashable datatypes, the second for non_hashable datatypes.
+      Set inaccurate_limit=(None,None) if you don't accept inaccuraties.
+
     Example:
     df = pak.people()
     df.groupby('age_class')['first_name'].apply(pak.most_freq_elt)    
     ''' 
     try:
-        result = list(series.mode())[0]
-    except IndexError:
-        result = np.NaN
-    return result
-        
+        if type_info(series).is_hashable:
+            if inaccurate_limit[0] is None:
+                return series.mode().iloc[0]
+            if series.shape[0] > inaccurate_limit[0]:
+                #print('ungenau hashable')
+                return quicksample(series, inaccurate_limit[0]).mode().iloc[0]
+            return series.mode().iloc[0]
+            
+        else:
+            if inaccurate_limit[1] is None:
+                return np.NaN
+            if series.shape[0] > inaccurate_limit[1]:
+                #print('ungenau not hashable')
+                result = quicksample(series, inaccurate_limit[1])
+                with warnings.catch_warnings():
+                    warnings.simplefilter(action='ignore', category=UserWarning)
+                    return result.mode().iloc[0]
+            return series.mode().iloc[0]
+    except:
+        return np.NaN
+        # list(series.mode())[0]
     
     
 
@@ -182,9 +202,7 @@ def top_values_count_1000(series): return top_values_count(series, limit=1000)
 
 
 
-    
-    
-    
+  
 
 
 def agg_words(series):
@@ -294,6 +312,7 @@ def agg_defaultdicts(series):
 
 
 
+
 # ==================================================================================================
 # dict
 # ==================================================================================================
@@ -311,7 +330,8 @@ def explode_dict(df, col_dict, col_key='key', col_value='value', from_defaultdic
     * from_defaultdict:  Should an additional explode be executed? 
                          This can be useful for defaultdicts. Otherwise you get lists.
     '''
-    
+    if not df.index.is_unique:
+        raise ValueError( 'index must be unique!')    
     result = pd.DataFrame([*df[col_dict]], df.index).stack().rename_axis([None,col_key]).reset_index(1, name=col_value)
     result = df.join(result)
     result = drop_cols(result,col_dict)
@@ -438,8 +458,9 @@ def cols_to_dict(df, col_dict='', cols_add=[], use_defaultdict=False, drop=True)
 
         # cols dazurechnen
         for col in cols_add:
-            if (zeile[col] and not pd.isna(zeile[col]))  or  (zeile[col] == 0):
-                zr[col].append(zeile[col])     
+            if not pd.isna(zeile[col]):
+                if zeile[col]  or  (zeile[col] == 0):
+                    zr[col].append(zeile[col])     
             
         zeile[col_dict] = zr
         return zeile        

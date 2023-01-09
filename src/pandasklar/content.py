@@ -8,7 +8,7 @@ import bpyth  as bpy
 
 from .config   import Config
 from .pandas   import reset_index, dataframe, drop_cols, rename_col, repeat
-from .analyse  import nunique, change_datatype
+from .analyse  import nunique, change_datatype, col_names
 from .compare  import check_equal
 from .scale    import scale
 
@@ -31,12 +31,20 @@ except:
 
 
 #
-def dump_excel(df, filename, filetype='xlsx', tabcol='', index=False, check=True ):
+def dump_excel(df, filename, filetype='xlsx', tabcol='', index=False, changedatatype=True, check=True, verbose=None ):
     """ 
     Writes a dataframe into an xlsx file for Excel or Calc.
     * tabcol:  Should the data get split into different Excel tabs using this column?
     * check:   Should the file be read in again and the result checked for identity?
     """
+    
+    if verbose is None:
+        verbose = Config.get('VERBOSE')      
+    
+    # changedatatype
+    if changedatatype:        
+        df = change_datatype(df, verbose=False)   
+        
     # .xlsx
     if not filename.endswith('.'+filetype):
         filename += '.'+filetype
@@ -59,8 +67,9 @@ def dump_excel(df, filename, filetype='xlsx', tabcol='', index=False, check=True
     if check:
         df2 = load_excel(filename, tabcol=tabcol)
         assert check_equal( df, df2, reset_index=True )
+              
 
-dataframe_to_excel = dump_excel
+#dataframe_to_excel = dump_excel
   
 
                 
@@ -68,36 +77,54 @@ dataframe_to_excel = dump_excel
 # Die Umkehrung: Liefert den Dataframe zurück.   
 # Wenn tabcol angegeben, wird eine zusätzliche Spalte angefügt, die den Namen des Tab enthält.
 #
-def load_excel(filename, filetype='xlsx', tabcol='', changedatatype=True):
+def load_excel(filename, filetype='xlsx', sheet_name=None, tabcol='', changedatatype=True, verbose=None):
     ''' 
     Loads a dataframe from an xlsx file (Excel or Calc).
+    * sheet_name:        Only read this sheet
     * tabcol:            Should the Excel tabs get a column in the result?
     * changedatatype:    Should the datatypes get optimized?
     '''
+    
+    if verbose is None:
+        verbose = Config.get('VERBOSE')  
+        
     # .xlsx
     if not filename.endswith('.'+filetype):
         filename += '.'+filetype
         
-    # alle Tabs in einem Dictionary
-    sheets_dict = pd.read_excel(filename, sheet_name=None ) 
+    # read
+    sheets_dict = pd.read_excel(filename, sheet_name=sheet_name ) 
     
-    full_table = pd.DataFrame()
+    if sheet_name is not None:
+        result = sheets_dict
+        if changedatatype:        
+            result = change_datatype(result, verbose=False)      
+        for col in col_names(result, 'str'):
+            result[col] = result[col].str.strip()             
+        return result
+    
+    result = pd.DataFrame()
     
     for name, sheet in sheets_dict.items():
         if tabcol != '':
             sheet[tabcol] = name # zusätzliche Spalte
         sheet = sheet.rename(columns=lambda x: x.split('\n')[-1])
-        #full_table = full_table.append(sheet)
-        full_table = pd.concat( [full_table, sheet] )
+        #result = result.append(sheet)
+        result = pd.concat( [result, sheet] )
 
-    full_table.reset_index(inplace=True, drop=True)  
+    result.reset_index(inplace=True, drop=True)  
     
     if changedatatype:        
-        full_table = change_datatype(full_table, verbose=False)    
+        result = change_datatype(result, verbose=False)    
+    for col in col_names(result, 'str'):
+        result[col] = result[col].str.strip()    
+        
+    if verbose:
+        print(result.shape[0], 'rows loaded')          
     
-    return full_table
+    return result
 
-excel_to_dataframe = load_excel
+#excel_to_dataframe = load_excel
 
 
 

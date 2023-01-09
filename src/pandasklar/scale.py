@@ -3,6 +3,17 @@ import random
 import numpy  as np
 from .config   import Config
 from .pandas  import repeat
+
+
+def gmean(x):
+    '''
+    Calculates Geometric Mean.
+    NaN-safe.
+    Usable for values with logarithmic character, e.g. the Geometric Mean of [1, 10, 100] is 10. 
+    '''
+    return np.exp(np.mean(np.log(x)))
+    
+    
     
 # ==================================================================================================
 # scale
@@ -215,33 +226,7 @@ def scale(series, method, powerfactor=1, almostzero=0.00000001, verbose=None ):
 
 
 
-# normiert eine Series auf einen Wert 0..1
-# wahrscheinlich ohne die 0 und ohne die 1
-# Der powerfactor verzerrt die Ergebnisse, so dass die Verteilung nicht mehr linear ist
-#def normiere_rang(s, powerfactor=1):
-#    if powerfactor == 1:
-#        rang = s.rank(method='dense')
-#    else:
-#        rang = np.power(s.rank(method='dense'), powerfactor)
-#    maximum = rang.max()
-#    result = rang / maximum
-#    abziehen = result.min() / 2
-#    return result - abziehen
 
-
-
-#
-# Wandelt ein Tuple (Rang, Rang_max) in einen Score 0..1 um
-# Tuple erzeugt man z.B. so:
-# vornam_3['Score'] = list(zip(vornam_3.Rang, vornam_3.Rang_max)) 
-# 
-def rang2score(inputtuple):
-    rang, max = inputtuple
-    result = 1-(rang/max) 
-    if result > 0.001:
-        return result
-    else:
-        return 0.001
 
 
 

@@ -14,6 +14,7 @@ import warnings, logging
 
 from .config   import Config
 from .pandas   import rename_col
+from .subsets  import sample
 
     
 
@@ -24,24 +25,23 @@ from .pandas   import rename_col
 
 # Todo: automatisch ausdünnen, wenn zuviele Datenpunkte
 #
-def plot(   df1, df2=None, x='--', size=(16, 4), palette=('rainbow','tab10'), line=(1,1)   ):
+def plot(   df1, df2=None, x='--', size=(16, 4), palette=('rainbow','tab10'), line=(1,1), inaccurate_limit=10000   ):
     ''' 
     Plots DataFrames or Series.
-    * df1, df2: The first two parameters are DataFrames or Series. 
-                If there are two, they get separate y-axes.
-    * x:        Which column contains the x-axis? 
-                x=='index' -> The index is used as x.    
-                If no x is given, x is tried to be guessed. 
-                If no suitable column is found, the index is used as x.
-                A column is considered suitable if it is called 'x', 'X' or 'index'.
-    size:       Width and height of the plot as tuples
-    palette:    The two palettes as tuple or sting
-    line:       The line thickness as tuple or number    
+    * df1, df2:         The first two parameters are DataFrames or Series. 
+                        If there are two, they get separate y-axes.
+    * x:                Which column contains the x-axis? 
+                        x='index' -> The index is used as x.    
+                        If no x is given, x is tried to be guessed. 
+                        If no suitable column is found, the index is used as x.
+                        A column is considered suitable if it is called 'x', 'X' or 'index'.
+    * size:             Width and height of the plot as tuples
+    * palette:          The two palettes as tuple or sting
+    * line:             The line thickness as tuple or number    
+    * inaccurate_limit: From what size should the data be thinned randomly.
+                        Uses pandasklars sample function, so minimums and maximums are kept. 
     '''   
-    
-    # filter findfont warnings
-    #warnings.filterwarnings( 'ignore', module = 'findfont' )  
-    
+        
     logging.getLogger('matplotlib.font_manager').disabled = True
     
     if isinstance(df1, pd.Series):
@@ -50,7 +50,10 @@ def plot(   df1, df2=None, x='--', size=(16, 4), palette=('rainbow','tab10'), li
         
     if isinstance(df2, pd.Series):      
         df2 = pd.DataFrame(df2).reset_index() 
-      
+    
+    # ausdünnen, falls nötig
+    df1 = sample(df1,inaccurate_limit)
+    df2 = sample(df2,inaccurate_limit)    
     
     # Einspaltiges DataFrame?
     #if df1.shape[1] == 1:       

@@ -59,12 +59,20 @@ def remove_words(series, remove_list):
     
     
     
-def replace_str(series, replace_dict):
+def replace_str(series, translationtable):
     '''
-    Replaces substrings from a Series of strings according to a dict.
-    * replace_dict: Example {'President Trump':'Trump', 'HELLO':'Hello'}
+    Replaces substrings from a Series of strings according to a translationtable.
+    * translationtable: Can be a dict, a list of tuples or a DataFrame with two columns.
+      Example: {'President Trump':'Trump',   'HELLO':'Hello'}
+      or      [('President Trump','Trump'), ('HELLO','Hello')]
     '''
-    for old, new in replace_dict.items():
+    if type(translationtable).__name__ == 'DataFrame':
+        translationtable = dict(zip(translationtable.iloc[:, 0], translationtable.iloc[:, 1]))
+    if not isinstance(translationtable, dict):
+        translationtable = dict(translationtable )
+        
+    # translationtable is dict now    
+    for old, new in translationtable.items():
         series = series.str.replace(old, new, regex=False)
     return series.str.strip()    
     

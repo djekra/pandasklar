@@ -20,6 +20,7 @@ from .content      import *
 from .string       import *
 from .rank         import *
 from .aggregate    import *
+from .subsets      import *
 
 # Klassen
 from .type_info    import type_info
