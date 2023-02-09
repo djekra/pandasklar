@@ -1,3 +1,8 @@
+
+
+from .config     import Config
+
+
 # ==================================================================================================
 # Ranking
 # ==================================================================================================
@@ -40,11 +45,11 @@ def rank_without_group(df, col_score, find='max', col_target='', on_conflict='fi
         return result
     
 
-def rank(df, col_score, cols_group=None, find='max', col_target='', on_conflict='first'):
+def rank(df, col_score, cols_group=None, find='max', col_target='', on_conflict='first',verbose=None):
     ''' 
     Select the max row per group. Or the min.
     Or mark the rows instead of selecting them. 
-    * cols_group:   Name of the columns to be grouped by.
+    * cols_group:   Name of the columns to be grouped by. None if no grouping needed.
     * col_score:    Name of the column whose minimum or maximum is to be found.
     * find:         'min' or 'max', default is 'max'.
     * col_target:   Should a ranking column be added? If yes, then give the name here.
@@ -54,8 +59,16 @@ def rank(df, col_score, cols_group=None, find='max', col_target='', on_conflict=
                     Possible values: 'min','max','average','dense' and 'first', see pandas rank.
     '''    
     
+    if verbose is None:
+        verbose = Config.get('VERBOSE')  
+        
     if cols_group is None:
-        return rank_without_group(df=df, col_score=col_score, find=find, col_target=col_target, on_conflict=on_conflict)
+        result = rank_without_group(df=df, col_score=col_score, find=find, col_target=col_target, on_conflict=on_conflict)
+        if verbose:
+            n0 = df.shape[0]
+            n1 = result.shape[0]        
+            print( 'rank: {0} rows less, now {1} rows'.format(n0-n1, n1)  )
+        return result
     
     if find=='max':
         ascending = False
@@ -73,6 +86,10 @@ def rank(df, col_score, cols_group=None, find='max', col_target='', on_conflict=
         if on_conflict != 'average':
             result[col_target] = result[col_target].astype(int)         
         
+    if verbose:
+        n0 = df.shape[0]
+        n1 = result.shape[0]        
+        print( 'rank: {0} rows less, now {1} rows'.format(n0-n1, n1)  )        
     return result 
 
     

@@ -9,6 +9,7 @@ from functools   import partial
 from collections import Counter, defaultdict 
 
 from .config       import Config
+from .rank         import rank
 
 
 #from .python     import flatten, rtype, shape, superstrip
@@ -225,28 +226,32 @@ def move_cols( df, colnames=None, to=0 ):
 # ==================================================================================================
 
 
-def update_col(df_to, df_from, on=[], left_on=[], right_on=[], col='', col_rename='', func='', cond='', keep='', verbose=None):
+def update_col(df_to, df_from, on=[], left_on=[], right_on=[], col='', col_rename='', col_score='', func='', cond='', keep='', return_mask=False, verbose=None):
     '''
     Transfers one column of data from one dataframe to another dataframe.
     Unlike a simple merge, the index and the dtypes are retained. 
     Handles dups and conditions. Verbose if wanted.
     
-    df_to:      Dataframe to be changed
-    df_from:    Dataframe that contains the new data. Does not have to be duplicate-free.
-    on:         Column name or list of column names whose values must match 
-    left_on:    Different for left and right if necessary
-    right_on:   Different for left and right if necessary    
-    col:        Name of the column to be transmitted. Must exist in df_from. 
-                If not present in df_to, it will be appended. 
-                If already present, matching values will be overwritten.
-    col_rename: New name for col, if specified. If already present, matching values will be overwritten and not matching values are preserved.      
-    func:       Name of the function used for dup avoidance. E.g. 'max'. If empty: No dup avoidance
-    cond:       Empty, 'min','max' or 'null'. 
-                'min','max': Only write if the new value is smaller / larger than the existing value
-                'null'     : Only write if there is no existing value in df_to (it's Null or empty string) 
-    keep:       Should the original value be kept in a separate column? 
-                The string keep is used as suffix for this column.
-                NaN if record is unchanged!  
+    df_to:        Dataframe to be changed
+    df_from:      Dataframe that contains the new data. Does not have to be duplicate-free.
+    on:           Column name or list of column names whose values must match 
+    left_on:      Different for left and right if necessary
+    right_on:     Different for left and right if necessary    
+    col:          Name of the column to be transmitted. Must exist in df_from. 
+                  If not present in df_to, it will be appended. 
+                  If already present, matching values will be overwritten.
+    col_rename:   New name for col, if specified. If already present, matching values will be overwritten and not matching values are preserved.      
+    col_score:     Name of a score column used for picking rows from df_from with maximum score. This is useful to avoid conflicting values in case of dups in df_from.
+                  If empty: No dup avoidance by rank.
+    func:         Name of the function used for dup avoidance. E.g. 'max'. If empty: No dup avoidance by func.
+                  Might be slow, use col_score if possible.   
+    cond:         Empty, 'min','max' or 'null'. 
+                  'min','max': Only write if the new value is smaller / larger than the existing value
+                  'null'     : Only write if there is no existing value in df_to (it's Null or empty string) 
+    keep:         Should the original value be kept in a separate column? 
+                  The string keep is used as suffix for this column.
+                  NaN if record is unchanged!  
+    return_mask:  If True, the result is a tuple of the resulting dataframe plus a mask masking the affected rows
     verbose:    Messages on / off
     '''
     
@@ -286,7 +291,16 @@ def update_col(df_to, df_from, on=[], left_on=[], right_on=[], col='', col_renam
         if (df_from.shape[0] == anz)  and  verbose:
             print('update_col:','func' ,func, 'applied, but it was pointless!')
         elif (df_from.shape[0] != anz)  and  verbose:
-            print('update_col:','func' ,func, 'applied,', anz - df_from.shape[0], 'records less!')            
+            print('update_col:','func' ,func, 'applied,', anz - df_from.shape[0], 'records less!')   
+            
+    elif col_score:
+        anz = df_from.shape[0]
+        df_from = rank(df_from, col_score=col_score, cols_group=right_on, on_conflict='first', verbose=False)[ right_on+[col] ].copy()
+        if (df_from.shape[0] == anz)  and  verbose:
+            print('update_col:','col_score' ,col_score, 'applied, but it was pointless!')
+        elif (df_from.shape[0] != anz)  and  verbose:
+            print('update_col:','col_score' ,col_score, 'applied,', anz - df_from.shape[0], 'records less!')           
+        
     else:
         df_from = df_from[ right_on+[col] ].copy()
     
@@ -323,19 +337,23 @@ def update_col(df_to, df_from, on=[], left_on=[], right_on=[], col='', col_renam
         else:         
             mask = result[col_new].notnull() 
         if verbose:
-            print(result[mask].shape[0], 'cells written into existing column')
+            print('update_col:', result[mask].shape[0], 'cells written into existing column')
         with warnings.catch_warnings():
             warnings.simplefilter(action='ignore', category=FutureWarning)   
             result.loc[mask, col_rename] = result.loc[mask, col_new]
         result = copy_datatype( result, df_to )    # datatypes restaurieren               
         #result[col_rename] = copy_datatype( result[col_rename], df_to[col_rename] )    # datatype restaurieren
         result = drop_cols(result,[col_new])
+        result_mask = mask.copy()
     
     # Die Spalte ist neu
     else:
         #print(list(df_from.columns))
         result             = copy_datatype( result,             df_to        )           # datatypes restaurieren        
-        result[col_rename] = copy_datatype( result[col_rename], df_from[col_rename] )    # datatype übernehmen        
+        result[col_rename] = copy_datatype( result[col_rename], df_from[col_rename] )    # datatype übernehmen    
+        result_mask = result[col_rename].notnull()
+        if verbose:
+            print('update_col:', result[result_mask].shape[0], 'cells written into new column')        
     
     if keep:
         mask = result[col_rename+keep] == result[col_rename]
@@ -344,7 +362,9 @@ def update_col(df_to, df_from, on=[], left_on=[], right_on=[], col='', col_renam
     if df_to.shape[0] != result.shape[0]:
         print('update_col:','WARNING: df_from identifier not unique.','I call this again with func="max"')
         return update_col(df_to, df_from, left_on=left_on, right_on=right_on, col=col, col_rename=col_rename, func='max', keep=keep, verbose=verbose)
-        
+    
+    if return_mask:
+        return result, result_mask
     return result
 
     

@@ -9,7 +9,7 @@ import bpyth  as bpy
 from collections import Counter, defaultdict 
 
 from .config     import Config
-from .pandas     import dataframe, reset_index, drop_cols, rename_col, move_cols, drop_multiindex, quicksample
+from .pandas     import dataframe, reset_index, drop_cols, rename_col, move_cols, drop_multiindex, quicksample, add_rows, move_rows
 from .type_info  import type_info
 
 
@@ -20,7 +20,7 @@ from .type_info  import type_info
 ###############################################################################################
 
 
-def group_and_agg(df, col_origins, col_funcs=None, col_names=None, dropna=True, verbose=None): 
+def group_and_agg(df, col_origins, col_funcs=None, col_names=None, dropna=True, optimize=False, verbose=None): 
     '''
     Groups and aggregates. Provides a user interface similar to that of MS Access.
     * col_origins: list of all columns to process
@@ -29,6 +29,8 @@ def group_and_agg(df, col_origins, col_funcs=None, col_names=None, dropna=True, 
                    'group' or '' = grouping. 
     * col_names:   list of new names for the result columns. Optional. Space = default name will be taken.
     * dropna:      Parameter for groupby.
+    * optimize:    True to handle duplicated rows seperatly. 
+                   Useful in situations with not many duplicated rows and slow functions in col_funcs.
     
     Example:
     df = pak.people()
@@ -41,7 +43,6 @@ def group_and_agg(df, col_origins, col_funcs=None, col_names=None, dropna=True, 
     if verbose is None:
         verbose = Config.get('VERBOSE')      
     
-    #df['dummy'] = 1
     # Steuertabelle bauen
     steuer = dataframe((col_origins,  col_funcs,  col_names), verbose=False)
     steuer.columns =  ['col_origins','col_funcs','col_names']
@@ -70,7 +71,23 @@ def group_and_agg(df, col_origins, col_funcs=None, col_names=None, dropna=True, 
     if col_names:
         mask = (steuer['col_names'].str.len() == 0)
         steuer.loc[mask,'col_names'] = steuer[mask].name_new # Standardnamen übernehmen
-    #return steuer    
+        
+    if optimize:
+        if df.isnull().values.any():
+            raise ValueError('Works without NaNs only')
+        mask = df.duplicated(subset=cols_group, keep=False)
+        df_unique, df_withdups = move_rows(df, mask, msg=None, verbose=False)
+        if verbose:
+            print( '{0} unique rows and {1} rows with duplicates'.format(df_unique.shape[0] , df_withdups.shape[0])  )
+        assert df_unique.shape[0] + df_withdups.shape[0] == df.shape[0]
+        result = group_and_agg( df_withdups, col_origins=col_origins, col_funcs=col_funcs, col_names=col_names, dropna=dropna, optimize=False, verbose=False)
+        result = add_rows(result,df_unique[col_origins],verbose=False)
+        result = reset_index(result)
+        if verbose:
+            n0 = df.shape[0]
+            n1 = result.shape[0]        
+            print( '{0} rows less, now {1} rows'.format(n0-n1, n1)  )        
+        return result    
     
     # result bauen
     if d:    

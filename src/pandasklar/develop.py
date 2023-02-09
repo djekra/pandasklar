@@ -96,7 +96,7 @@ def check_mask(df, mask, expectation_min=None, expectation_max=None, msg='', sto
         
     # expectation_min fehlt
     if expectation_min is None:     
-        print(msg, "{0} rows".format(anz_ds).strip()  )   
+        print('check_mask:', msg, "{0} rows".format(anz_ds).strip()  )   
         return
     
     # wurde vielleicht schon abgearbeitet?
@@ -110,7 +110,7 @@ def check_mask(df, mask, expectation_min=None, expectation_max=None, msg='', sto
         error = " ERROR: {0} rows, but it should be at least {1}".format(anz_ds, expectation_min)     
     else:
         if verbose:
-            print(msg, "{0} rows".format(anz_ds).strip()  )  
+            print('check_mask:',msg, "{0} rows".format(anz_ds).strip()  )  
         
     #raise_later  
     if (anz_ds > expectation_max)  or (anz_ds < expectation_min):
