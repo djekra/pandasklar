@@ -13,9 +13,12 @@ Comes in the form of helper functions, i.e. without changes to pandas, just on t
 Full dokumentation see `jupyter` directory.
 
 
+## Try out
+The directory `jupyter` contains many notebooks with examples. They are very easy to try out interactively online, with Google Colab. Just click the link at the top of the page and then select Runtime/Run all from the menu in Colab.
+
+
 ## Install
 `pip install pandasklar`
-
 
 ## Create Random Data for Testing
 * `random_series`: Returns a series of random data of several types, including names, random walks with perlin-noise and errorprone series to test your functions.
@@ -23,13 +26,11 @@ Full dokumentation see `jupyter` directory.
 * `people` and `random_numbers`: Random data for testing.
 
 
-## Review and visualize
-* `plot`: Plot with seaborn without configuration.
+## Develop
 * `check_mask`: Count rows filtered by a binary mask. Raises an error, if the number is unexpected.
 * `specials`: Returns rows representing all special values per column.
 * `sample`: Returns some sample rows: beginning + end + specials + random rows.
 * `search_str`: Searches all str columns of a dataframe. Useful for development and debugging.
-* `grid`: Visualize with dtale.
 * `memory_consumption`: Returns the memory consumption of Python objects.
 
 

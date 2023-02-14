@@ -27,18 +27,18 @@ def scale(series, method, powerfactor=1, almostzero=0.00000001, verbose=None ):
       'rel','mean','median','compare_median','rank' or 'random'
     * powerfactor is an additional parameter for scaling 'rank'
 
-    ## scale method='max_abs'
+    __scale method='max_abs'__
     * scales every value with a fixed factor
     * one finds: Every scaled value is somewhere in the range -1..1
     * series_scaled.max() is often 1
     * series_scaled.min() can be anything -1..0.999    
 
-    ## scale method='min_max'
+    __scale method='min_max'__
     * forces all scaled values to fit the full range 0..1 (closed interval)
     * one finds: series_scaled.min() == 0
     * one finds: series_scaled.max() == 1 if there are more than 2 different values
 
-    ## scale method='min_max_robust'
+    __scale method='min_max_robust'__
     * like min_max, but robust against outlier values. 
       Works with quantile(0.01) and quantile(0.99) instead of min() and max().
       The scaling is therefore not determined by the outliers.
@@ -46,26 +46,26 @@ def scale(series, method, powerfactor=1, almostzero=0.00000001, verbose=None ):
     * one finds: series_scaled.min() <= 0 but not much lower  than -0.02 normally
     * one finds: series_scaled.max() >= 1 but not much higher than  1.02 normally
 
-    ## scale method='rel'
+    __scale method='rel'__
     * scales every value with a fixed factor so that
     * series_scaled.sum() == 1  or  series_scaled.sum() == -1 
     * therefore, this scaling is well suited for frequencies, 
       the numerical values are then the relative frequencies
     * series_scaled.min()  and  series_scaled.max() are numbers near 0
 
-    ## scale method='mean'
+    __scale method='mean'__
     * also called z-score
     * one finds: series_scaled.mean() == 0 
     * one finds: series_scaled.std()  == 1 if there are more than 2 different values
     * a typical range for the scaled values is -1.7..1.7
 
-    ## scale method='median'
+    __scale method='median'__
     * like mean, but more robust against outliner values.
     * one finds: series_scaled.median() == 0 
     * a typical range for the scaled values is -1..1, 
       but the range can be much wider than with mean
 
-    ## scale method='compare_median'
+    __scale method='compare_median'__
     * scales 0..1 below median and 1.. above median 
     * So you can multipy the scaled values by any factor, keeping the comparison to the median.
     * one finds: all values < median are 0..1
@@ -75,7 +75,7 @@ def scale(series, method, powerfactor=1, almostzero=0.00000001, verbose=None ):
     * unlike most other scalings, the plots do not lie on top of each other, 
       but have a different shape
 
-    ## scale method='rank'
+    __scale method='rank'__
     * scales 0..1 (open interval)
     * scales by rank
     * distributes evenly over the interval, the original shape is destroyed. 
@@ -83,7 +83,7 @@ def scale(series, method, powerfactor=1, almostzero=0.00000001, verbose=None ):
     * if powerfactor == 1 one finds: series_scaled.median() == 0.5 
     * additional parameter powerfactor deforms the scale, see example
 
-    ## scale method='random'
+    __scale method='random'__
     * scales randomly
     * generates an ugly, krank scaling for testings
     

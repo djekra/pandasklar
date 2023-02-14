@@ -12,12 +12,6 @@ from .config       import Config
 from .rank         import rank
 
 
-#from .python     import flatten, rtype, shape, superstrip
-#import locale
-#locale.setlocale(locale.LC_ALL, '') 
-
-
-
 #################################################################################################
 # ...............................................................................................
 # Einzelner Dataframe

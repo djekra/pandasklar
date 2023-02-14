@@ -2,20 +2,150 @@ import warnings
 
 import pandas     as pd 
 import numpy      as np
-
    
-try:
-    import dtale
-except ImportError:
-    warnings.warn('dtale not importable. Think about pip install dtale')    
-    
 try:
     from termcolor import colored    # um Fehlermeldungen rot auszugeben
 except ImportError:
     pass
 
+try:
+    import dtale
+except ImportError:
+    warnings.warn('dtale not present. Think about pip install dtale')    
+
 from .config   import Config
 from .analyse  import col_names    
+    
+    
+    
+# ==============================================================================================
+# dtale Settings
+# ==============================================================================================
+
+try:
+    import dtale.global_state as global_state
+except:
+    pass
+
+
+def set_grid(**kwargs):
+    ''' 
+    Sets settings for dtale.
+    Ex:
+    set_grid(max_column_width=1000)
+    '''
+    #print(kwargs)
+    try:
+        global_state.set_app_settings( kwargs) 
+    except:
+        pass        
+    
+    
+    
+def reset_grid():
+    '''
+    Resets settings for dtale to default values.
+    '''
+    try:
+        set_grid( max_column_width=300, 
+                  theme='light')
+    except:
+        pass
+    
+    
+try:    
+    reset_grid()   
+except:
+    pass    
+    
+    
+    
+    
+# ==============================================================================================
+# grid
+# ==============================================================================================
+
+def grid( df, mask=None, error='€€€', color='blue', **kwargs ):
+    '''
+    Visualization of a DataFrame using dtale.
+    * df:     DataFrame to show
+    * mask:   Binary mask, function or Searchstring to reduce the number of rows
+    * error:  Error message
+    * color:  Color of the error message.
+    * kwargs: Options for dtale. See https://github.com/man-group/dtale#instance-settings
+              Caution: This will affect all grids in this notebook...
+    dtale may not work in a multiscreen setting on windows.
+    
+    === Examples ===
+    grid(df)                        # show all rows
+    grid(df,mask)                   # show with binary mask    
+    grid(df,sample)                 # show with functionally mask
+
+    === For error indication after check_mask ===
+    error = check_mask(df, mask, 900, stop=False)
+    grid(df, mask, error) 
+    and later: raise_if(error)
+    '''
+    
+    def print_color(msg, color):
+        if color:
+            try:
+                msg = colored(msg, color, attrs=['reverse','bold'])
+            except:
+                pass   
+        print(msg)  
+    
+    
+    if df is None:
+        print_color('Nothing to show', 'red')        
+        return 
+    
+    if df.shape[0] == 0:
+        print_color('No rows', color)   
+        return
+    
+    # verschiedene mask behandeln
+    if isinstance(mask, pd.Series)  or  isinstance(mask, np.ndarray):
+        df_show = df[mask]
+    elif callable(mask):   
+        df_show = mask(df)
+    elif isinstance(mask, str):
+        df_show = search_str(df, mask)
+    else:
+        df_show = df
+        
+    if df_show.shape[0] == 0:
+        print_color('No rows, mask filters them all away', color)
+        return
+
+    with warnings.catch_warnings():
+        warnings.simplefilter(action='ignore', category=FutureWarning)   
+        try:
+            widget = dtale.show(df_show,**kwargs) # funktioniert nicht für alle options. Z.B. nicht für max_column_width
+        except:
+            widget = None
+
+    # Anzahl printen
+    if error: # gemeint ist, wenn error irgendwas enthält, z.B. den Standardwert'€€€'
+        if (df_show.shape[0] != df.shape[0])  and  (df_show.shape[0] > 0):
+            print( df_show.shape[0], 'rows out of', df.shape[0] )     
+        else:
+            print( df_show.shape[0], 'rows' )
+                
+    # grid wird zur Anzeige potentieller Fehler genutzt, aber es gibt keine Fehler.
+    # Dann wird auch kein Widget ausgegeben.
+    else:       
+        return 
+        
+    # Widget ausgeben
+    if df_show.shape[0] > 0:
+        if widget is not None:
+            return widget
+        else:
+            return df_show
+
+
+    
     
 # ==============================================================================================
 # search_str
@@ -121,131 +251,4 @@ def check_mask(df, mask, expectation_min=None, expectation_max=None, msg='', sto
             print_red(   (msg + error).strip()  )
             return error.strip()
     
-    
-
-
-# ==============================================================================================
-# dtale Settings
-# ==============================================================================================
-
-try:
-    import dtale.global_state as global_state
-except:
-    pass
-
-
-def set_grid(**kwargs):
-    ''' 
-    Sets settings for dtale.
-    Ex:
-    set_grid(max_column_width=1000)
-    '''
-    #print(kwargs)
-    global_state.set_app_settings( kwargs) 
-    
-    
-    
-def reset_grid():
-    '''
-    Resets settings for dtale to default values.
-    '''
-    set_grid( max_column_width=300, 
-                  theme='light')
-    
-    
-try:    
-    reset_grid()   
-except:
-    pass
-    
-
-
-# ==============================================================================================
-# grid
-# ==============================================================================================
-
-def grid( df, mask=None, error='€€€', color='blue', **kwargs ):
-    '''
-    Visualization of a DataFrame using dtale.
-    * df:     DataFrame to show
-    * mask:   Binary mask, function or Searchstring to reduce the number of rows
-    * error:  Error message
-    * color:  Color of the error message.
-    * kwargs: Options for dtale. See https://github.com/man-group/dtale#instance-settings
-              Caution: This will affect all grids in this notebook...
-    dtale may not work in a multiscreen setting on windows.
-    
-    === Examples ===
-    grid(df)                        # show all rows
-    grid(df,mask)                   # show with binary mask    
-    grid(df,sample)                 # show with functionally mask
-
-    === For error indication after check_mask ===
-    error = check_mask(df, mask, 900, stop=False)
-    grid(df, mask, error) 
-    and later: raise_if(error)
-    '''
-    
-    def print_color(msg, color):
-        if color:
-            try:
-                msg = colored(msg, color, attrs=['reverse','bold'])
-            except:
-                pass   
-        print(msg)  
-    
-    
-    if df is None:
-        print_color('Nothing to show', 'red')        
-        return 
-    
-    if df.shape[0] == 0:
-        print_color('No rows', color)   
-        return
-    
-    # verschiedene mask behandeln
-    if isinstance(mask, pd.Series)  or  isinstance(mask, np.ndarray):
-        df_show = df[mask]
-    elif callable(mask):   
-        df_show = mask(df)
-    elif isinstance(mask, str):
-        df_show = search_str(df, mask)
-    else:
-        df_show = df
-        
-    if df_show.shape[0] == 0:
-        print_color('No rows, mask filters them all away', color)
-        return
-
-
-    # widget erzeugen
-    #widget = dtale.show(df_show,**kwargs) # funktioniert nicht  
-    #widget.update_settings({'theme':'light', 'max_column_width':150}) # funktioniert auch nicht
-    #global_state.set_app_settings( kwargs)  
-    
-    #set_grid(**kwargs)
-    with warnings.catch_warnings():
-        warnings.simplefilter(action='ignore', category=FutureWarning)    
-        widget = dtale.show(df_show,**kwargs) # funktioniert nicht für alle options. Z.B. nicht für max_column_width
-    #reset_grid()
-    #widget = dtale.show(df_show)   
-
-    # Anzahl printen
-    if error: # gemeint ist, wenn error irgendwas enthält, z.B. den Standardwert'€€€'
-        if (df_show.shape[0] != df.shape[0])  and  (df_show.shape[0] > 0):
-            print( df_show.shape[0], 'rows out of', df.shape[0] )     
-        else:
-            print( df_show.shape[0], 'rows' )
-                
-    # grid wird zur Anzeige potentieller Fehler genutzt, aber es gibt keine Fehler.
-    # Dann wird auch kein Widget ausgegeben.
-    else:       
-        return 
-        
-    # Widget ausgeben
-    if df_show.shape[0] > 0:
-        return widget
-
-
-
     

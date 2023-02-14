@@ -21,26 +21,6 @@ from .rank         import rank_without_group
 
 
     
-try:
-    from termcolor import colored    
-except ImportError:
-    pass
-
-
-import matplotlib.pyplot as plt
-#sns.set()
-
-
-try:
-    import seaborn as sns
-except ImportError:
-    print('seaborn not importable')  
-    
-
-
-
-
-
 
 # ==================================================================================================
 # Load und save (gehört eigentlich nicht hierher, muss aber wg. changedatatype
@@ -440,90 +420,12 @@ def nan_rows(df, col=''):
 
  
     
-    
-    
-    
-
-#################################################################################################
-# ...............................................................................................
-# Series 
-# ...............................................................................................
-#################################################################################################
-
-
-
-
-
-# ==============================================================================================
-# verteilung
-# ==============================================================================================
-
-#def verteilung(series, style=None, quantile=1, stat=True):
-#    '''
-#    Veraltet. Verwende analyse_freqs stattdessen.
-#    Liefert Informationen über die Verteilung einer Series
-#    style:       ('key','top','plot')
-#    quantile:  wird nur für den Plot verwendet und schneidet ihn ab
-#    basiert auf seaborn für die grafische Darstellung bzw. auf countgrid für die textuelle Darstellung
-#    Beispiel siehe Pandas/Analyse
-#    '''
-#    warnings.warn('Veraltet. Verwende analyse_freqs stattdessen.')
-#    from matplotlib import pyplot as plt
-#    
-#    # Mini-Statistik
-#    s = analyse_values(series, as_dict=True)
-#    if stat:
-#        print(s)   
-#        print()
-#    
-#    # automatische style-Auswahl
-#    if not style  and  is_string_dtype(series):
-#        style = 'key'  
-#    if not style  and  not s:
-#        style = 'key'      
-#    if not style  and  (int(s['nunique'])<=7):
-#        style = 'key'   
-#    if not style:  
-#        style = 'top'         
-#    
-#    # textuell
-#    if (style == 'key'): 
-#        return countgrid(series, sort=False)
-#    
-#    # textuell
-#    elif (style == 'top'): 
-#        return countgrid(series, sort=True)    
-#    
-#    
-#    # grafisch
-#    else:
-#        mask = (series <= series.quantile(quantile))   &   (series >= series.quantile(1-quantile)) 
-#        try:
-#            plt.figure(figsize=(16, 4))
-#            return seaborn.histplot(series[mask])
-#        except RuntimeError as re:
-#            if str(re).startswith("Selected KDE bandwidth is 0. Cannot estimate density."):
-#                return seaborn.histplot(series[mask], kde_kws={'bw': 0.1})
-#            else:
-#                raise re
-#        except ValueError as error:
-#            if str(error).startswith("could not convert string to float"):
-#                plt.figure(figsize=(0, 0))
-#                return countgrid(series, sort=True)    
-#            else:
-#                raise error        
-
-                
-                
-                
-
-                
+               
                 
                 
                 
 # ==============================================================================================
 # analyse_freqs 
-# war: top_beispiele
 # ==============================================================================================
 
 def analyse_freqs(data, cols=None, limits=[], splits=[], sort_count=True ):

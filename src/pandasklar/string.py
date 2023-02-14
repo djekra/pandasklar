@@ -10,15 +10,6 @@ from .config   import Config
 from .pandas   import rename_col
 
 
-# import locale
-# locale.setlocale(locale.LC_ALL, '') 
-
-
-
-
-    
-
-
 
 
 

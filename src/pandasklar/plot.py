@@ -1,168 +1,86 @@
 
-import numpy  as np
 import pandas as pd
-
-try:
-    import seaborn
-except ImportError:
-    pass
-    #print('no seaborn, plot will not work')  
-##seaborn.set()
-    
 import matplotlib.pyplot as plt   
 import warnings, logging
 
 from .config   import Config
-from .pandas   import rename_col
+from .analyse  import col_names
+from .pandas   import dataframe
 from .subsets  import sample
 
-    
 
-    
-# ==============================================================================================
-# plot
-# ==============================================================================================
 
-# Todo: automatisch ausdünnen, wenn zuviele Datenpunkte
-#
-def plot(   df1, df2=None, x='--', size=(16, 4), palette=('rainbow','tab10'), line=(1,1), inaccurate_limit=10000   ):
-    ''' 
-    Plots DataFrames or Series.
-    * df1, df2:         The first two parameters are DataFrames or Series. 
-                        If there are two, they get separate y-axes.
-    * x:                Which column contains the x-axis? 
-                        x='index' -> The index is used as x.    
-                        If no x is given, x is tried to be guessed. 
-                        If no suitable column is found, the index is used as x.
-                        A column is considered suitable if it is called 'x', 'X' or 'index'.
-    * size:             Width and height of the plot as tuples
-    * palette:          The two palettes as tuple or sting
-    * line:             The line thickness as tuple or number    
+
+def plot( data, x=None, secondary_y=False, ylabel=None, subplots=False, figsize=None, inaccurate_limit=10000, **kwargs ):
+    """
+    Plots data. All parameters are passed to pandas.DataFrame.plot, but 
+    * data:             The data to plot. DataFrame, or list of Series, or any other data 
+                        which can be converted to DataFrame by the pandasklar dataframe function.
+                        Non-numeric columns are ignored (even for column positions). 
+    * x:                Which column to be used as x-axis. Column name or column position.
+                        x=None -> The index is used as x.   
+    * secondary_y:      Which columns to plot on the secondary y-axis. 
+                        Column name, column position or list of column names.
+    * figsize:          Size of a figure object. Default is (16,3) or (16,4), depending on the data.
     * inaccurate_limit: From what size should the data be thinned randomly.
-                        Uses pandasklars sample function, so minimums and maximums are kept. 
-    '''   
-        
+                        Uses pandasklars sample function, so minimums and maximums are kept.     
+
+    """
+    
     logging.getLogger('matplotlib.font_manager').disabled = True
     
-    if isinstance(df1, pd.Series):
-        df1 = pd.DataFrame(df1).reset_index()
-        x='index'
-        
-    if isinstance(df2, pd.Series):      
-        df2 = pd.DataFrame(df2).reset_index() 
+    # DataFrame erzwingen
+    if not isinstance(data, pd.DataFrame):
+        data = dataframe(data, verbose=False)
+    
+    # nur numerische Spalten
+    cols = col_names(data, query='is_numeric==True')
+    data = data[cols]
     
     # ausdünnen, falls nötig
-    df1 = sample(df1,inaccurate_limit)
-    df2 = sample(df2,inaccurate_limit)    
+    data = sample(data,inaccurate_limit)    
     
-    # Einspaltiges DataFrame?
-    #if df1.shape[1] == 1:       
-    #    df1 = df1.reset_index()
-    #    col0 = list(df1.columns)[0]
-    #    df1 = rename_col(df1, col0, 'x')   
-    #    x = 'x'
-    #
-    #if not df2 is None:
-    #    if df2.shape[1] == 1:               
-    #        df2 = df2.reset_index()
-    #        col0 = list(df2.columns)[0]
-    #        df2 = rename_col(df2, col0, 'x')   
-    #        #x = 'x2'
+    # Parameter x
+    if x is not None:
+        if isinstance(x, (int, float, complex)) and not isinstance(x, bool):
+            x = data.columns[x]
+        data = data.set_index(x)
     
-    # Kein x festgelegt aber es gibt eine Spalte namens x, X oder index
-    schnittmenge = set(df1.columns)  &  {'x','X','index'}
-    if x=='--':
-        schnittmenge = set(df1.columns)  &  {'x','X','index'}        
-        if len(schnittmenge)==1:
-            x = next(iter(schnittmenge))  # x festlegen
-    
-    # Erste Spalte untersuchen
-    if x=='--':
-        col0 = list(df1.columns)[0]
-        if list(df1[col0]) == list(df1.index):
-            x = col0
+    # Parameter secondary_y
+    if type(secondary_y) is str:
+        secondary_y = [secondary_y] #let the command take a string or list    
+    elif isinstance(secondary_y, (int, float, complex)) and not isinstance(secondary_y, bool):
+        secondary_y = [data.columns[secondary_y]]
+        
+    # Parameter ylabel
+    if ylabel is None and secondary_y != False:
+        ylabel = ',  '.join(secondary_y) 
+        
+    # Parameter figsize   
+    if figsize is None:
+        if secondary_y  or  data.shape[1] > 2  or  subplots:
+            figsize = (16,4)
         else:
-            x = 'index'
-      
-    # x=='index'
-    if x=='index' and not 'index' in df1.columns:
-        df1 = df1.reset_index()            
-        x='index'
-        if not df2 is None:
-            if not 'index' in df2.columns:
-                df2 = df2.reset_index()              
-   
-    #print('x =',x)        
-        
-    # palette1 und palette2  festlegen    
-    if isinstance(palette, tuple):
-        palette1 = palette[0]
-        palette2 = palette[1]
-    else:
-        palette1 = palette
-        
-    # line1 und line2  festlegen    
-    if isinstance(line, tuple):
-        line1 = line[0]
-        line2 = line[1]
-    else:
-        line1 = line      
+            figsize = (16,3)        
     
-    # Erste y-Achse  
+    return data.plot( secondary_y=secondary_y, ylabel=ylabel, subplots=subplots, figsize=figsize, **kwargs)
 
-    plt.figure(figsize=size)
-    seaborn.lineplot(x=x, 
-                 y='value', 
-                 hue='variable', 
-                 palette=palette1,
-                 linewidth=line1,
-                 data=pd.melt(df1, [x])
-                )       
-    plt.legend(loc='upper left')
-    plt.ylabel( ' '.join([str(c) for c in df1.columns[1:]]) )
     
-    if df2 is None:
-        return
-    
-    # Zweite y-Achse
-    ax2 = plt.twinx()
-    seaborn.lineplot(x=x, 
-                 y='value', 
-                 hue='variable', 
-                 palette=palette2,
-                 linewidth=line2,                 
-                 data=pd.melt(df2, [x]),
-                 ax=ax2
-                )     
-
-    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)  
-    plt.ylabel( ' '.join([str(c) for c in df2.columns[1:]]) )
-    
-                
 
         
-# ==============================================================================================
-# histo
-# ==============================================================================================
+    
+
         
-def histo(series, quantile=1):                
-    '''Histogramm'''
-    logging.getLogger('matplotlib.font_manager').disabled = True
-    mask = (series <= series.quantile(quantile))   &   (series >= series.quantile(1-quantile)) 
-    try:
-        plt.figure(figsize=(16, 4))
-        return seaborn.histplot(series[mask])
-    except RuntimeError as re:
-        if str(re).startswith("Selected KDE bandwidth is 0. Cannot estimate density."):
-            return seaborn.histplot(series[mask], kde_kws={'bw': 0.1})
-        else:
-            raise re
-    except ValueError as error:
-        if str(error).startswith("could not convert string to float"):
-            plt.figure(figsize=(0, 0))
-            return countgrid(series, sort=True)    
-        else:
-            raise error                        
+
+    
+
+
+
+
+
+
+
+
 
 
 
