@@ -16,11 +16,14 @@ class Config:
     __conf = {
                 'VERBOSE': False,
     }
-    __setters = ['VERBOSE', ]
+    __setters = ['VERBOSE', 'GRID_BACKEND']
 
     @staticmethod
     def get(name):
-        return Config.__conf[name]
+        try:
+            return Config.__conf[name]
+        except:
+            return None
 
     
     

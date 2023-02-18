@@ -31,6 +31,7 @@ The directory `jupyter` contains many notebooks with examples. They are very eas
 * `specials`: Returns rows representing all special values per column.
 * `sample`: Returns some sample rows: beginning + end + specials + random rows.
 * `search_str`: Searches all str columns of a dataframe. Useful for development and debugging.
+* `plot`: Easier plot.
 * `memory_consumption`: Returns the memory consumption of Python objects.
 
 

@@ -65,7 +65,7 @@ except:
 # grid
 # ==============================================================================================
 
-def grid( df, mask=None, error='€€€', color='blue', **kwargs ):
+def grid( df, mask=None, error='€€€', color='blue', backend=None, **kwargs ):
     '''
     Visualization of a DataFrame using dtale.
     * df:     DataFrame to show
@@ -86,6 +86,11 @@ def grid( df, mask=None, error='€€€', color='blue', **kwargs ):
     grid(df, mask, error) 
     and later: raise_if(error)
     '''
+    
+    if backend is None:
+        backend = Config.get('GRID_BACKEND')   # Global setting
+    if backend is None:
+        backend = 'dtale'                      # default         
     
     def print_color(msg, color):
         if color:
@@ -120,10 +125,12 @@ def grid( df, mask=None, error='€€€', color='blue', **kwargs ):
 
     with warnings.catch_warnings():
         warnings.simplefilter(action='ignore', category=FutureWarning)   
+        widget = None
         try:
-            widget = dtale.show(df_show,**kwargs) # funktioniert nicht für alle options. Z.B. nicht für max_column_width
+            if backend.lower() == 'dtale':
+                widget = dtale.show(df_show,**kwargs) # funktioniert nicht für alle options. Z.B. nicht für max_column_width
         except:
-            widget = None
+            pass
 
     # Anzahl printen
     if error: # gemeint ist, wenn error irgendwas enthält, z.B. den Standardwert'€€€'
@@ -138,6 +145,7 @@ def grid( df, mask=None, error='€€€', color='blue', **kwargs ):
         return 
         
     # Widget ausgeben
+    # falls nicht vorhanden: Dataframe ausgeben
     if df_show.shape[0] > 0:
         if widget is not None:
             return widget
