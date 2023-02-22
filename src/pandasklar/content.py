@@ -34,8 +34,9 @@ except:
 def dump_excel(df, filename, filetype='xlsx', tabcol='', index=False, changedatatype=True, check=True, verbose=None ):
     """ 
     Writes a dataframe into an xlsx file for Excel or Calc.
-    * tabcol:  Should the data get split into different Excel tabs using this column?
-    * check:   Should the file be read in again and the result checked for identity?
+    * tabcol:         Should the data get split into different Excel tabs using this column?
+    * check:          Should the file be read in again and the result checked for identity?
+    * changedatatype: Should the datatypes get adjusted automaticly?
     """
     
     if verbose is None:

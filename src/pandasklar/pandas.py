@@ -603,7 +603,7 @@ def move_rows(df_from, df_to=None, mask=None, msg='', msgcol='msg', verbose=None
         raise ValueError('df_from must be a DataFrame')         
         
     # df_to enthält mask    
-    if isinstance(df_to, pd.Series):
+    if isinstance(df_to, pd.Series)  or  isinstance(df_to, np.ndarray):
         mask  = df_to
         df_to = None
         

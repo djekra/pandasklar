@@ -36,6 +36,8 @@ class Config:
             if Config.get('VERBOSE'):  
                 print( name,'=', value)
                 if name == 'VERBOSE':
-                    print( '--> setting verbose=True as default for all pandasklar functions\n' )
+                    print( '--> setting verbose={} as default for all pandasklar functions\n'.format(value) )
+                elif name == 'GRID_BACKEND':
+                    print( '--> setting backend={} as default for all pandasklar functions\n'.format(value)  )                    
         else:
             raise NameError("Name not accepted in set() method")
