@@ -409,7 +409,10 @@ def copy_datatype(data_to, data_from):
                 
     elif isinstance(data_to, pd.Series)   and  isinstance(data_from, pd.Series):
         #print(data_from.dtypes.name)
-        result = result.astype(data_from.dtypes.name)
+        try:
+            result = result.astype(data_from.dtypes.name)
+        except:
+            pass
         return result
     
     else: 

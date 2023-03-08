@@ -65,13 +65,15 @@ except:
 # grid
 # ==============================================================================================
 
-def grid( df, mask=None, error='€€€', color='blue', backend=None, **kwargs ):
+def grid( df, mask=None, error='€€€', color='blue', backend=None, without=None, **kwargs ):
     '''
     Visualization of a DataFrame using dtale.
-    * df:     DataFrame to show
-    * mask:   Binary mask, function or Searchstring to reduce the number of rows
-    * error:  Error message
-    * color:  Color of the error message.
+    * df:       DataFrame to show
+    * mask:     Binary mask, function or Searchstring to reduce the number of rows
+    * error:    Error message
+    * color:    Color of the error message.
+    * backend:  'dtale' or None for dTale
+    * without:  Columns to ignore
     * kwargs: Options for dtale. See https://github.com/man-group/dtale#instance-settings
               Caution: This will affect all grids in this notebook...
     dtale may not work in a multiscreen setting on windows.
@@ -118,6 +120,13 @@ def grid( df, mask=None, error='€€€', color='blue', backend=None, **kwargs
         df_show = search_str(df, mask)
     else:
         df_show = df
+        
+    # spalten ausschließen
+    if without is not None:
+        if type(without) is str:
+            without = [without] #let the command take a string or list
+        spalten = [c for c in df_show.columns if c not in without]
+        df_show = df_show[spalten]
         
     if df_show.shape[0] == 0:
         print_color('No rows, mask filters them all away', color)
