@@ -351,7 +351,9 @@ def update_col(df_to, df_from, on=[], left_on=[], right_on=[], col='', col_renam
     
     if keep:
         mask = result[col_rename+keep] == result[col_rename]
-        result.loc[mask,col_rename+keep] = np.NaN
+        with warnings.catch_warnings():
+            warnings.simplefilter(action='ignore', category=FutureWarning)           
+            result.loc[mask,col_rename+keep] = np.NaN
         
     if df_to.shape[0] != result.shape[0]:
         print('update_col:','WARNING: df_from identifier not unique.','I call this again with func="max"')

@@ -3,7 +3,7 @@
 
 [project]
 name            = "pandasklar"
-version         = "0.2.4"    
+version         = "0.2.5"    
 
 requires-python = ">=3.8"
 dependencies    = ['pandas','numpy','perlin_noise','termcolor','bpyth','blab',]
