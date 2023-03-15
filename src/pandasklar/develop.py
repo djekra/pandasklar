@@ -192,10 +192,11 @@ def search_str(df, find, without=[]):
 # check_mask
 # ==============================================================================================
 
-def check_mask(df, mask, expectation_min=None, expectation_max=None, msg='', stop=True, verbose=None):
+def check_mask(df, mask, expectation_min=None, expectation_max=None, msg='', stop=True, manually=False, verbose=None):
     """ 
     Count rows filtered by a binary mask.
     Raises an error, if the number is unexpected.
+    * manually:    For debugging: If you just want to see the effect of a mask, without raising anything, add manually=True.
 
     Examples:
     ==========
@@ -220,6 +221,11 @@ def check_mask(df, mask, expectation_min=None, expectation_max=None, msg='', sto
     
     if verbose is None:
         verbose = Config.get('VERBOSE')      
+    
+    
+    if manually:
+        print_red(' No check performed ')
+        return grid(df,mask,color=None)    
     
     error = ''
     
