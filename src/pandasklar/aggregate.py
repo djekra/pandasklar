@@ -10,7 +10,9 @@ from collections import Counter, defaultdict
 
 from .config     import Config
 from .pandas     import dataframe, reset_index, drop_cols, rename_col, move_cols, drop_multiindex, quicksample, add_rows, move_rows
+from .rank       import rank
 from .type_info  import type_info
+
 
 
 ###############################################################################################
@@ -18,6 +20,65 @@ from .type_info  import type_info
 # Aggregation ...
 # .............................................................................................
 ###############################################################################################
+
+
+
+def partial_pivot( df, col_pivot=None, col_score=None, cols_group=None,  width_max=None):
+    
+    result = df.copy()
+        
+    # col_score
+    if col_score is None:
+        col_score = 'temp_score_gRwdnr'
+        result[col_score] = 0
+    result[col_score] = result[col_score].fillna(result[col_score].min()-1 )
+    
+    # cols_group
+    if cols_group is None:
+        cols_group = [ c for c in list(result.columns) if c != col_score and c != col_pivot ]
+    elif type(cols_group) is str:
+        cols_group = [cols_group] #let the command take a string or list          
+    
+    # isnull
+    if result.isnull().values.any():
+        raise ValueError('Works without NaNs only')
+    
+    # ranken
+    result = rank(result, col_score=col_score, cols_group=cols_group, col_target='pivot_rank', verbose=False)
+
+    # max_i
+    max_i = result.pivot_rank.max()
+    if width_max is not None and width_max < max_i:
+        max_i = width_max
+    
+    # group_and_agg vorbereiten
+    col_origins = cols_group.copy()    
+    col_funcs   = [''] * len(col_origins)
+    col_names   = [''] * len(col_origins)    
+    
+    # eintragen
+    for i in range(0,max_i):
+        #print(i)
+        c = col_pivot + '_' + str(i)
+        col_origins += [c]
+        col_funcs   += ['first']    
+        col_names   += [c]               
+        mask = result.pivot_rank == i+1
+        result.loc[mask,c] = result[mask][col_pivot]
+
+
+    result = group_and_agg( result, col_origins, col_funcs, col_names, verbose=False)
+
+    return result
+
+
+
+
+
+
+
+
+
 
 
 def group_and_agg(df, col_origins, col_funcs=None, col_names=None, dropna=True, optimize=False, verbose=None): 
@@ -31,6 +92,7 @@ def group_and_agg(df, col_origins, col_funcs=None, col_names=None, dropna=True, 
     * dropna:      Parameter for groupby.
     * optimize:    True to handle duplicated rows seperatly. 
                    Useful in situations with not many duplicated rows and slow functions in col_funcs.
+                   There is a known bug with default names with optimize=True, you should use col_names explicitly for col_funcs other than 'group'.
     
     Example:
     df = pak.people()
@@ -73,8 +135,8 @@ def group_and_agg(df, col_origins, col_funcs=None, col_names=None, dropna=True, 
         steuer.loc[mask,'col_names'] = steuer[mask].name_new # Standardnamen übernehmen
         
     if optimize:
-        if df.isnull().values.any():
-            raise ValueError('Works without NaNs only')
+        if df[col_origins].isnull().values.any():
+            raise ValueError('Works without NaNs in col_origins only')
         mask = df.duplicated(subset=cols_group, keep=False)
         df_unique, df_withdups = move_rows(df, mask, msg=None, verbose=False)
         if verbose:

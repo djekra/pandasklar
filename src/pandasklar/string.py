@@ -27,6 +27,10 @@ def remove_str(series, remove_list, safemode=True):
                    safemode=False: Works with one regular expression.
                                    Special characters such as asterisks must be backslashed.    
     '''
+    
+    # sort by len
+    remove_list = sorted(remove_list, key=len, reverse=True)
+    
     if safemode:
         for r in remove_list:
             series = series.str.replace(r, '', regex=False)
@@ -45,6 +49,9 @@ def remove_words(series, remove_list):
     Removes a list of unwanted words from a Series of strings.
     Works by regular expression, so special characters such as asterisks must be backslashed.  
     '''
+    # sort by len
+    remove_list = sorted(remove_list, key=len, reverse=True)
+    
     pat = r'\b(?:{})\b'.format('|'.join(remove_list))   # 
     return series.str.replace( pat, '', regex=True ).str.strip()        
     
@@ -191,6 +198,7 @@ def fast_startswith(df, col_search, col_found, searchfor, find_longest=True, fin
         if ((data!=prefix) or find_identical ) and data.startswith(prefix): 
             return prefix    
     
+
     search = pd.DataFrame(searchfor)
     search.columns = ['searchstring'] 
     search['len'] = search.searchstring.str.len()
@@ -198,9 +206,10 @@ def fast_startswith(df, col_search, col_found, searchfor, find_longest=True, fin
     lengroups = grouped.agg(list).reset_index().sort_values('len', ascending=find_longest)  
     result = df.copy()
     result[col_found] = None
- 
-    for index, row in lengroups.iterrows():
-        result[col_found].update(result[col_search].apply(startwiths, searchme=sorted(row.searchstring), find_identical=find_identical)  )  
+        
+    with pd.option_context("mode.copy_on_write", False):           
+        for index, row in lengroups.iterrows():
+            result[col_found].update(result[col_search].apply(startwiths, searchme=sorted(row.searchstring), find_identical=find_identical)  )  
         
     result[col_found] = result[col_found].astype('string')    
     return result

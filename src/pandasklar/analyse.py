@@ -41,7 +41,7 @@ def load_pickle( filename, resetindex='AUTO', changedatatype=False, verbose=None
     if verbose is None:
         verbose = Config.get('VERBOSE')  
         
-    result = bpy.load_pickle(filename)
+    result = pd.read_pickle(filename)
     if resetindex == True:
         result = result.reset_index()
     elif resetindex == 'AUTO':
@@ -72,8 +72,17 @@ def dump_pickle( df, filename, changedatatype=True, verbose=None ):
         
     if changedatatype:       
         df = change_datatype(df, verbose=False)
-    bpy.dump_pickle(df,filename)
+        
+    pd.to_pickle(df,filename)    
+    
+    if verbose:
+        print(df.shape[0], 'rows written')      
+    
+        
 
+to_pickle   = dump_pickle
+read_pickle = load_pickle
+    
     
     
     

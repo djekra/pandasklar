@@ -333,7 +333,7 @@ def update_col(df_to, df_from, on=[], left_on=[], right_on=[], col='', col_renam
         if verbose:
             print('update_col:', result[mask].shape[0], 'cells written into existing column')
         with warnings.catch_warnings():
-            warnings.simplefilter(action='ignore', category=FutureWarning)   
+            warnings.simplefilter('ignore')    
             result.loc[mask, col_rename] = result.loc[mask, col_new]
         result = copy_datatype( result, df_to )    # datatypes restaurieren               
         #result[col_rename] = copy_datatype( result[col_rename], df_to[col_rename] )    # datatype restaurieren
@@ -352,7 +352,7 @@ def update_col(df_to, df_from, on=[], left_on=[], right_on=[], col='', col_renam
     if keep:
         mask = result[col_rename+keep] == result[col_rename]
         with warnings.catch_warnings():
-            warnings.simplefilter(action='ignore', category=FutureWarning)           
+            warnings.simplefilter('ignore')           
             result.loc[mask,col_rename+keep] = np.NaN
         
     if df_to.shape[0] != result.shape[0]:
