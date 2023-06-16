@@ -116,7 +116,19 @@ def analyse_datatype(data):
     """ 
     Returns a dict with info about the datatypes of a Series or Index and it's content
     """
+
+
+    def is_datetime_series(series):
+        try:
+            pd.to_datetime(series)
+            return pd.api.types.is_datetime64_any_dtype(series)
+        except ValueError:
+            return False
+
     
+    if isinstance(data, pd.DataFrame): 
+        return dataframe( analyse_datatypes(data) ) 
+        
     # Aufruf mit Index
     if isinstance(data, pd.Index): 
         series = data.to_series()
@@ -131,6 +143,7 @@ def analyse_datatype(data):
         'datatype_short': info.name_short,        
         'is_numeric': is_numeric_dtype(data),                
         'is_string': is_string_dtype(data),  
+        'is_datetime': pd.api.types.is_datetime64_any_dtype(data),         
         'is_hashable': info.is_hashable,
         'nan_allowed': info.nan_allowed,   
         'mem_usage': mem_usage(data),        

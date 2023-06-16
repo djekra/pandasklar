@@ -142,7 +142,7 @@ def random_series(size, typ, **kwargs):
     ''' 
     Returns a series of random data. 
     * size
-    * typ: 'int', 'float', 'string', 'name', 'choice', 'list', 'mix',
+    * typ: 'int', 'float', 'string', 'name', 'choice', 'list', 'time', mix',
            'ascending', 'descending', 'perlin' or 'errorprone'. Or the first letter of this.
            'name' generates random first names, 'list' generates lists of random first names.
            'mix' generates mixed datatypes. 
@@ -161,7 +161,8 @@ def random_series(size, typ, **kwargs):
     - string: len_min, len_max: controls the length of the generated character sequence
               mix: Explicit specification of the available character set. Overwrites p_dup. 
                    Example: mix='ABCabc'
-    - list:   len_min, len_max: controls the length of the generated lists.                   
+    - list:   len_min, len_max: controls the length of the generated lists. 
+    - time:   min, max
     - choice: choice: List or Series of elements to choose
     - perlin: freq: List of up to frequencies, see random_perlin for more details
               op: 'add' or 'mult', how the frequencies are linked together
@@ -190,7 +191,9 @@ def random_series(size, typ, **kwargs):
     elif typ in ['choice','c']: 
         myfunc = random_series_choice  
     elif typ in ['list','l']: 
-        myfunc = random_series_list     
+        myfunc = random_series_list  
+    elif typ in ['time','t','datetime']: 
+        myfunc = random_series_datetime         
     elif typ in ['mix','m']: 
         myfunc = random_series_mix     
     elif typ in ['errorprone','e']: 
@@ -384,6 +387,16 @@ def random_perlin( shape=(100,5), freq=[3,6,12,24], op='add'):
 # ==================================================================================================
 # Interne Funktionen für zufällige Testdaten
 # ==================================================================================================
+
+
+def random_series_datetime( size, min='1900-01-01', max='2023-12-31', name='rnd_time', index=None, p_nan=0, p_dup=0):
+    '''
+    Returns a series of random datetime between min and max. 
+    '''
+    random_dates = pd.to_datetime(np.random.randint(pd.Timestamp(min).value, pd.Timestamp(max).value, size), unit='ns')
+    result = pd.Series(random_dates)  
+    result = result.rename(name)  
+    return result
     
 
 def random_series_int( size, min=0, max=1000, name='rnd_int', index=None, p_nan=0, p_dup=0):
@@ -536,10 +549,10 @@ def random_series_mix(size, name='rnd_mix', p_nan=0, p_dup=0):
     d = random_series( anz, 'string', len_min=2, len_max=20,          )
     e = random_series( anz, 'name',                                   )
     f = random_series( anz, 'choice', choice=['Bremen','Bremerhaven'] )
-    g = random_series( anz, 'list',                                   )    
+    g = random_series( anz, 'list',                                   )  
+    h = random_series( anz, 'time',                                   )      
       
-    #result = b.append(c).append(d).append(e).append(f).append(g)
-    result = pd.concat( [b, c, d, e, f, g] )
+    result = pd.concat( [b, c, d, e, f, g, h] )
     result = result.sample(frac=1).reset_index(drop=True).head(size)
     result = result.rename(name)    
     result.iloc[0] = {0}

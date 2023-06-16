@@ -1,5 +1,5 @@
 
-import collections, warnings
+import collections.abc, warnings
 
 import numpy  as np
 import pandas as pd
@@ -71,7 +71,7 @@ class type_info:
         if self.name_instance == 'mix':
             self.is_hashable = False    
         else:
-            self.is_hashable = isinstance(self.instance1, collections.Hashable)  and  isinstance(self.instance2, collections.Hashable)
+            self.is_hashable = isinstance(self.instance1, collections.abc.Hashable)  and  isinstance(self.instance2, collections.abc.Hashable)
             
         # name_short
         if '.' in search:
