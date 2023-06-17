@@ -244,3 +244,27 @@ def preprocess_strings( dirty, how=''):
     raise('preprocess_strings ist jetzt in bj_nlp')
 
 
+
+def force_string(s):
+    ''' Forces a Series to String'''
+    t = pd.get_option('display.max_colwidth')
+    pd.set_option('display.max_colwidth', 100000)
+    s = s.to_string(index=False)
+    pd.set_option('display.max_colwidth', t)   
+    return s
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+
+

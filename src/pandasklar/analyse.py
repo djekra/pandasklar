@@ -94,16 +94,22 @@ read_pickle = load_pickle
     
 
     
-def mem_usage(data):
+def mem_usage(data, human_readable=True):
     """Returns the memory consumption of a Series or a DataFrame"""
     
     if isinstance(data, pd.Series): 
         result = data.memory_usage(index=False, deep=True)
-        return bpy.human_readable_bytes(result)    
+        if human_readable:
+            return bpy.human_readable_bytes(result) 
+        else:
+            return result
     
     elif isinstance(data, pd.DataFrame):
         result = data.memory_usage(index=False, deep=True).sum()
-        return bpy.human_readable_bytes(result)    
+        if human_readable:
+            return bpy.human_readable_bytes(result) 
+        else:
+            return result 
         
     else:
         assert 'ERROR'    
@@ -112,28 +118,19 @@ def mem_usage(data):
 
 
 # Alle class_info einer Series oder eines Index   
-def analyse_datatype(data):
+def analyse_datatype(data, human_readable=True):
     """ 
     Returns a dict with info about the datatypes of a Series or Index and it's content
     """
-
-
-    def is_datetime_series(series):
-        try:
-            pd.to_datetime(series)
-            return pd.api.types.is_datetime64_any_dtype(series)
-        except ValueError:
-            return False
-
     
     if isinstance(data, pd.DataFrame): 
-        return dataframe( analyse_datatypes(data) ) 
+        return dataframe( analyse_datatypes(data, human_readable=human_readable) ) 
         
     # Aufruf mit Index
     if isinstance(data, pd.Index): 
         series = data.to_series()
         series.name = '__index__'
-        return analyse_datatype(series)    
+        return analyse_datatype(series, human_readable=human_readable)    
 
     info = type_info(data)
     result = {
@@ -146,7 +143,7 @@ def analyse_datatype(data):
         'is_datetime': pd.api.types.is_datetime64_any_dtype(data),         
         'is_hashable': info.is_hashable,
         'nan_allowed': info.nan_allowed,   
-        'mem_usage': mem_usage(data),        
+        'mem_usage': mem_usage(data, human_readable=human_readable),        
     }
         
     return result
@@ -154,21 +151,21 @@ def analyse_datatype(data):
 
 
 # Alle class_info eines DataFrame
-def analyse_datatypes(df, with_index=True):
+def analyse_datatypes(df, with_index=True, human_readable=True):
     """
     Returns info about the datatypes and the mem_usage of the columns of a DataFrame.  
     """
     if isinstance(df, pd.Series): 
-        return dataframe( analyse_datatype(df), verbose=False ) 
+        return dataframe( analyse_datatype(df, human_readable=human_readable), verbose=False ) 
     
     # Kleine Probe reicht
     if df.shape[0] > 10:
-        return analyse_datatypes(quicksample(df, 10), with_index=with_index)
+        return analyse_datatypes(quicksample(df, 10), with_index=with_index, human_readable=human_readable)
     
     data  = [] 
     if with_index:
-        data += [ analyse_datatype(df.index)]
-    data     += [ analyse_datatype(df[col]) for col in df ]
+        data += [ analyse_datatype( df.index, human_readable=human_readable) ]
+    data     += [ analyse_datatype( df[col],  human_readable=human_readable) for col in df ]
 
     result = dataframe(data, verbose=False)
 
@@ -330,6 +327,7 @@ def analyse_values(data, as_list=False, as_dict=False, sort=False, with_index=Tr
         info.vmax,      
         info.vsum,            
         info.datatype_suggest,
+        info.datatype_identified,
     ]
     
     # Rückgabe als Liste
@@ -338,7 +336,7 @@ def analyse_values(data, as_list=False, as_dict=False, sort=False, with_index=Tr
     
     # In DataFrame wandeln
     result = pd.DataFrame(result)
-    result['analyse'] = pd.Series(['col_name','ntypes', 'nunique','nnan','ndups','n','vmin','vmean','vmedian','vmax','vsum','datatype_suggest'])
+    result['analyse'] = pd.Series(['col_name','ntypes', 'nunique','nnan','ndups','n','vmin','vmean','vmedian','vmax','vsum','datatype_suggest','datatype_identified'])
     result = result.set_index('analyse')
     
     # Rückgabe als dict
@@ -357,16 +355,16 @@ def analyse_values(data, as_list=False, as_dict=False, sort=False, with_index=Tr
 # analyse_cols
 # ==================================================================================================
 
-def analyse_cols(df, sort=False, with_index=True):
+def analyse_cols(df, sort=False, with_index=True, human_readable=True):
     """ 
     Describes the datatypes and the content of a DataFrame.
     Merged info from analyse_datatypes and analyse_values.
     """   
         
-    info1  = analyse_datatypes(df, with_index=with_index)
+    info1  = analyse_datatypes(df, with_index=with_index, human_readable=human_readable)
     info2  = analyse_values(   df, with_index=with_index)
     result = pd.merge(info1, info2)    
-    result = move_cols(result, ['col_name','datatype_instance','datatype','datatype_short','datatype_suggest'])
+    result = move_cols(result, ['col_name','datatype_instance','datatype','datatype_short','datatype_suggest','datatype_identified'])
 
     if sort:
         result = result.sort_values(['nunique','col_name'], ascending=[False,True])    
@@ -610,6 +608,9 @@ def ntypes(series):
     NaN values are not counted.
     '''
     return series[series.notna()].map(type).nunique()
+
+
+
 
 
 

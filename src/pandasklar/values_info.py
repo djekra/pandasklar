@@ -1,10 +1,11 @@
-
+import warnings
 import numpy  as np
 import pandas as pd
 
 from pandas.api.types import is_string_dtype, is_numeric_dtype
 
 from .config       import Config
+from .type_info    import type_info
 
 
 
@@ -118,15 +119,83 @@ class values_info:
                                             
             # wieder löschen wenn schon erfüllt
             if self.datatype_suggest == self.type_info.name:
-                self.datatype_suggest = ''
+                self.datatype_suggest = ''                
         # Ende if (self.ntypes == 1)
-        
+
+        # datatype_identified
+        self.datatype_identified = identify_datatype(data) 
+        if self.datatype_identified == '' and self.datatype_suggest.endswith('string'):
+            self.datatype_identified = 'string'
+        if self.datatype_identified.startswith('float'):
+            self.datatype_identified = 'float'  
+        if self.datatype_identified.startswith('int'):
+            self.datatype_identified = 'int'                 
         
     def info(self):
         """Returns all attributes"""
         result = dict(self.__dict__) # Kopie ziehen
         #del result['data']
         return result    
-    
+
+
+
+def identify_datatype(series):
+    '''    
+    # Example usage
+    data = pd.Series([1, 2, '3', pd.Timestamp('2022-01-01'), 'text'])
+    data_type = identify_data_type(data)
+    print(data_type)
+    '''
+    result = type_info(series).name_short 
+    if result == 'object':
+        result = ''
+
+    filtered_series = series.dropna()
+    str_series = filtered_series.astype(str)
+
+    try:
+        # Try converting to float
+        float_series = pd.to_numeric(str_series, errors='raise').astype(float)
+        if (float_series == filtered_series).all():
+            result = 'float'
+    except:
+        pass
+        
+    try:
+        # Try converting to int
+        int_series = pd.to_numeric(str_series, errors='raise').astype(int)
+        diff_sum = (int_series - filtered_series).abs().sum()
+        if diff_sum < 0.00001:
+            result = 'int'    
+    except:
+        pass
+
+    try:
+        # Try converting to datetime
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            datetime_series = pd.to_datetime(str_series, errors='raise')
+        if (datetime_series == filtered_series).all():
+            result = 'datetime'
+    except:
+        pass
+
+    try:
+        # Count comma
+        if result in ['','string']:
+            kommas = str_series.str.count(',').sum()
+            alle = str_series.str.len().sum() 
+            duplicate_count = series.duplicated().sum()
+            total_count = len(series)
+            if kommas / alle > 0.05:
+                result = 'list'
+            if duplicate_count / total_count > 0.2   and kommas / alle > 0.02:
+                result = 'list'
+            if duplicate_count / total_count > 0.4   and kommas / alle > 0.01:
+                result = 'list'                
+    except:
+        pass        
+
+    return result    
     
     
