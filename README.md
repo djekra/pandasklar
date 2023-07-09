@@ -114,6 +114,7 @@ The directory `jupyter` contains many notebooks with examples. They are very eas
 * `remove_str`: Removes a list of unwanted substrings from a Series of strings.
 * `remove_words`: Removes a list of unwanted words from a Series of strings.
 * `replace_str`: Replaces substrings from a Series of strings according to a dict.
+* `preprocess_str`: Multiple methods for simplification and cleaning
 
 
 ## Slice Strings Variably

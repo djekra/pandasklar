@@ -82,8 +82,11 @@ def compare_series(s, t, format='dict'):
                 result['content'] = None               
 
             # sort
-            if list(s) == list(t):
-                result['sort'] = True    
+            try:
+                if list(s) == list(t):
+                    result['sort'] = True 
+            except:
+                result['sort'] = None  
 
             # eq
             if s.eq(t).all(skipna=False): 
