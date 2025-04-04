@@ -8,11 +8,6 @@ try:
 except ImportError:
     pass
 
-try:
-    import dtale
-except ImportError:
-    warnings.warn('dtale not present. Think about pip install dtale')    
-
 from .config   import Config
 from .analyse  import col_names    
     
@@ -22,12 +17,6 @@ from .analyse  import col_names
 # dtale Settings
 # ==============================================================================================
 
-try:
-    import dtale.global_state as global_state
-except:
-    pass
-
-
 def set_grid(**kwargs):
     ''' 
     Sets settings for dtale.
@@ -36,6 +25,7 @@ def set_grid(**kwargs):
     '''
     #print(kwargs)
     try:
+        import dtale.global_state as global_state
         global_state.set_app_settings( kwargs) 
     except:
         pass        
@@ -47,6 +37,7 @@ def reset_grid():
     Resets settings for dtale to default values.
     '''
     try:
+        import dtale.global_state as global_state
         set_grid( max_column_width=300, 
                   theme='light')
     except:
@@ -233,6 +224,7 @@ def check_mask(df, mask, expectation_min=None, expectation_max=None, msg='', sto
         msg = '{:<50s}'.format(msg)
     
     # expectation_max fehlt
+    # das bedeutet, die Angabe war expectation_circa
     if not (expectation_min is None) and (expectation_max is None):
         if expectation_min == 0:
             e_min = 0
@@ -241,11 +233,14 @@ def check_mask(df, mask, expectation_min=None, expectation_max=None, msg='', sto
             e_min = int(expectation_min * 0.5) # Verdoppelung oder Halbierung wird toleriert
             e_max = int(expectation_min * 2.0) + 1        
         return check_mask(df, mask, e_min, e_max, msg=msg, stop=stop, verbose=verbose) 
-    
-    if type(mask) == pd.Series   or   type(mask) == np.ndarray:
-        anz_ds = df[mask].shape[0]
+
+    if type(mask) == pd.Series:
+        mask = np.array(mask)
+
+    if len(mask) == 0:
+        anz_ds = 0
     else:
-        anz_ds = df.shape[0]
+        anz_ds = df[mask].shape[0]
         
     # expectation_min fehlt
     if expectation_min is None:     

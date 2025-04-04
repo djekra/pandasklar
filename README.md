@@ -20,6 +20,9 @@ The directory `jupyter` contains many notebooks with examples. They are very eas
 ## Install
 `pip install pandasklar`
 
+## Create DataFrames Easily
+* `dataframe`: Converts multidimensional objects into dataframes. Dictionaries and Tuples are interpreted column-wise, Lists and Counters by rows.
+
 ## Create Random Data for Testing
 * `random_series`: Returns a series of random data of several types, including names, random walks with perlin-noise and errorprone series to test your functions.
 * `decorate`: Decorates a series with specials (e.g. NaNs)
@@ -85,8 +88,7 @@ The directory `jupyter` contains many notebooks with examples. They are very eas
    Unlike a simple merge, the index and the dtypes are retained. Handles dups and conditions. Verbose if wanted.
 
 
-## Create DataFrames Easily
-* `dataframe`: Converts multidimensional objects into dataframes. Dictionaries and Tuples are interpreted column-wise, Lists and Counters by rows.
+
 
 
 ## Save and load data

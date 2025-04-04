@@ -7,6 +7,13 @@ from .config     import Config
 # Ranking
 # ==================================================================================================
 
+# TODO
+# Teste, ob specials mit einem DataFrame, der nur NaN-Werte enthält, korrekt funktioniert
+# df = pd.DataFrame({'col1': [np.nan, np.nan], 'col2': [np.nan, np.nan]})
+# result = specials(df, indicator='note')
+# >> FutureWarning
+
+
 def rank_without_group(df, col_score, find='max', col_target='', on_conflict='first'):
     '''
     Select the max row. Or the min.  

@@ -5,7 +5,7 @@ import warnings, logging
 
 from .config   import Config
 from .analyse  import col_names
-from .pandas   import dataframe
+from .dataframe  import dataframe
 from .subsets  import sample
 
 
@@ -31,7 +31,7 @@ def plot( data, x=None, secondary_y=False, ylabel=None, subplots=False, figsize=
     
     # DataFrame erzwingen
     if not isinstance(data, pd.DataFrame):
-        data = dataframe(data, verbose=False)
+        data = dataframe(data, verbose=False, framework='pandas')
     
     # nur numerische Spalten
     cols = col_names(data, query='is_numeric==True')

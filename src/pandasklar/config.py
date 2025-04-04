@@ -15,8 +15,9 @@ class Config:
     
     __conf = {
                 'VERBOSE': False,
+                'FRAMEWORK':'pandas'
     }
-    __setters = ['VERBOSE', 'GRID_BACKEND']
+    __setters = ['VERBOSE', 'GRID_BACKEND', 'FRAMEWORK']
 
     @staticmethod
     def get(name):
@@ -36,8 +37,16 @@ class Config:
             if Config.get('VERBOSE'):  
                 print( name,'=', value)
                 if name == 'VERBOSE':
-                    print( '--> setting verbose={} as default for all pandasklar functions\n'.format(value) )
+                    print( '--> setting parameter verbose={} as default for all pandasklar functions\n'.format(value) )
                 elif name == 'GRID_BACKEND':
-                    print( '--> setting backend={} as default for all pandasklar functions\n'.format(value)  )                    
+                    print( '--> setting parameter grid_backend={} as default for all pandasklar functions\n'.format(value)  )
+                elif name == 'FRAMEWORK':
+                    print( '--> setting parameter framework={} as default for all pandasklar functions\n'.format(value)  )
         else:
             raise NameError("Name not accepted in set() method")
+
+
+
+
+
+            

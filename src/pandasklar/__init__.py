@@ -11,6 +11,7 @@ from .config       import *
 from .pandas       import *
 
 # Themen
+from .dataframe    import *
 from .develop      import *
 from .scale        import *
 from .compare      import *
@@ -23,7 +24,8 @@ from .subsets      import *
 from .plot         import *
 
 # Klassen
-from .type_info    import type_info
-from .values_info  import values_info
+from .type_info_pandas    import type_info_pandas
+from .type_info_polars    import type_info_polars
+from .values_info         import values_info
 
 

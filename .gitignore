@@ -161,10 +161,8 @@ venv.bak/
 dmypy.json
 
 
-
 # Pyre type checker
 .pyre/
-
 
 
 # IPython
@@ -172,21 +170,19 @@ profile_default/
 ipython_config.py
 
 
-
 # Jupyter Notebook
 .ipynb_checkpoints
-
 
 
 #nb_out (run all command)
 nb_out
 
 
-
 # Local project
 jupyter_privat
 
-
+# PyCharm
+*.idea
 
 
 

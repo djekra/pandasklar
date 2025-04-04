@@ -5,13 +5,15 @@ from functools import partial
 import pandas as pd 
 import numpy  as np
 import bpyth  as bpy
+import numbers
    
 from collections import Counter, defaultdict 
 
 from .config     import Config
-from .pandas     import dataframe, reset_index, drop_cols, rename_col, move_cols, drop_multiindex, quicksample, add_rows, move_rows
+from .dataframe  import dataframe
+from .pandas     import reset_index, drop_cols, rename_col, move_cols, drop_multiindex, quicksample, add_rows, move_rows
 from .rank       import rank
-from .type_info  import type_info
+from .type_info_pandas  import type_info_pandas
 
 
 
@@ -106,7 +108,7 @@ def group_and_agg(df, col_origins, col_funcs=None, col_names=None, dropna=True, 
         verbose = Config.get('VERBOSE')      
     
     # Steuertabelle bauen
-    steuer = dataframe((col_origins,  col_funcs,  col_names), verbose=False)
+    steuer = dataframe((col_origins,  col_funcs,  col_names), verbose=False, framework='pandas')
     steuer.columns =  ['col_origins','col_funcs','col_names']
     #return steuer
     steuer.col_funcs = steuer.col_funcs.fillna('')
@@ -197,7 +199,7 @@ def most_freq_elt(series, inaccurate_limit=(10000,1000) ):
     df.groupby('age_class')['first_name'].apply(pak.most_freq_elt)    
     ''' 
     try:
-        if type_info(series).is_hashable:
+        if type_info_pandas(series).is_hashable:
             if inaccurate_limit[0] is None:
                 return series.mode().iloc[0]
             if series.shape[0] > inaccurate_limit[0]:
@@ -207,7 +209,7 @@ def most_freq_elt(series, inaccurate_limit=(10000,1000) ):
             
         else:
             if inaccurate_limit[1] is None:
-                return np.NaN
+                return np.nan
             if series.shape[0] > inaccurate_limit[1]:
                 #print('ungenau not hashable')
                 result = quicksample(series, inaccurate_limit[1])
@@ -216,7 +218,7 @@ def most_freq_elt(series, inaccurate_limit=(10000,1000) ):
                     return result.mode().iloc[0]
             return series.mode().iloc[0]
     except:
-        return np.NaN
+        return np.nan
         # list(series.mode())[0]
     
     
@@ -280,7 +282,27 @@ def top_values_count_100(series):  return top_values_count(series, limit=100)
 def top_values_count_1000(series): return top_values_count(series, limit=1000)
 
 
+def agg_numbers(data):
+    """
+    Sucht in beliebigen Iterables oder Series nach Zahlen und summiert diese.
+    Egal wie verschachtelt die Struktur ist.
 
+    Args:
+        data (iterable or pd.Series): Das zu durchsuchende Iterable oder die Series.
+
+    Returns:
+        float: Die Summe aller gefundenen Zahlen.
+    """
+    if isinstance(data, pd.Series):
+        data = data.tolist()
+
+    flat_data = bpy.flatten(data)
+
+    total_sum = 0
+    for item in flat_data:
+        if isinstance(item, numbers.Number):
+            total_sum += item
+    return total_sum
   
 
 
@@ -294,7 +316,7 @@ def agg_words(series):
         result = ' '.join(series.fillna(''))    
         result = bpy.superstrip(result)
     except:
-        result = np.NaN
+        result = np.nan
     return result
 
 # alter Name
@@ -314,7 +336,7 @@ def agg_strings_nospace(series):
     try:
         result = ''.join(series.fillna(''))
     except:
-        result = np.NaN
+        result = np.nan
     return result
 
 

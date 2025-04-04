@@ -1,51 +1,52 @@
 # pyproject.toml
 
-
-[project]
+[tool.poetry]
 name            = "pandasklar"
-version         = "0.3.6"    
-
-requires-python = ">=3.8"
-dependencies    = ['pandas','numpy','perlin_noise','termcolor','bpyth','blab',]
-
-authors        = [{ name = "djekra", email = "hopsalla@gmail.com" }]
+version         = "0.4.1"
 description     = "Toolbox / Ecosystem for data science. Easier handling of pandas, especially when thinking in SQL."
+authors        = ["djekra <hopsalla@gmail.com>"] # Hier war der Fehler
 readme          = "README.md"
-license         = {text = "MIT"}
+license         = "MIT"
 classifiers     = [
                   "Programming Language :: Python :: 3",
                   "License :: OSI Approved :: MIT License",
                   "Operating System :: OS Independent",
 ]
+homepage = "https://github.com/djekra/pandasklar"
+repository = "https://github.com/djekra/pandasklar"
+keywords = ["pandas", "data science", "sql"]
 
-#keywords       = ["one", "two"]
-#dynamic        = ["version"]
+[tool.poetry.dependencies]
+python = ">=3.10"
+pandas = ">=2.0"
+polars = ">=1.26"
+numpy = ">=2.0"
+bpyth = ">=0.2.1"
+blab = ">=0.2.0"
+openpyxl = ">=3.1.5,<4.0.0"
+termcolor = ">=2.5.0,<3.0.0"
+perlin-noise = ">=1.1,<2.0"
+#dtale = ">=3.16,<4.0"
+pyarrow = "^19.0.1"
 
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.5"
+jupyterlab = "^4.3.6"
 
-#[project.optional-dependencies]
-#pdf = ["ReportLab>=1.2", "RXP"]
-#rest = ["docutils>=0.3", "pack ==1.1, ==1.3"]
+[tool.poetry.extras]
+optional = ["termcolor", "perlin-noise"]
+# oder
+termcolor = ["termcolor"]
+perlin = ["perlin-noise"]
 
-
-# optional: dtale, termcolor
-# unbedingt: pandas, numpy
-
-
-[project.urls]
-Homepage = "https://github.com/djekra/pandasklar"
-
-
-[project.scripts]
+[tool.poetry.scripts]
 pandasklar = "pandasklar.__main__:main"
 
-
 [build-system]
-requires      = ["setuptools>=61.0.0", "wheel"]
-build-backend = "setuptools.build_meta"
-
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
 
 # Additional package data
-
 [tool.setuptools]
 include-package-data = true
 
@@ -55,7 +56,6 @@ where = ['src']
 [tool.setuptools.package-data]
 blab = ['*.txt', '*.ipynb']
 
-
-
-
-
+[tool.pytest.ini_options]
+markers = [ "jetzt: pytest -m jetzt führt nur die mit @pytest.mark.jetzt markierte Tests aus", ]
+filterwarnings = ["ignore::DeprecationWarning", ]

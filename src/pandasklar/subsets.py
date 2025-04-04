@@ -1,9 +1,13 @@
+
+# 0.5 untested
+
 import warnings
 import pandas as pd
+import polars as pl
 
 from functools     import partial  
 
-from .pandas       import dataframe, reset_index, drop_cols, rename_col, move_cols, first_valid_value, last_valid_value
+from .pandas       import reset_index, drop_cols, rename_col, move_cols, first_valid_value, last_valid_value
 from .aggregate    import most_freq_elt
 from .rank         import rank_without_group
 from .analyse      import col_names
@@ -16,7 +20,7 @@ from .analyse      import col_names
 # ==================================================================================================
 
 
-def specials(df, find=['head','first','min','most','max','nan','last','tail'], indicator=None, sort='index' ):
+def specials(df, find=['head','first','min','most','max','nan','last','tail'], indicator=None ):
     '''
     Returns rows representing all special values per column.
     The resulting dataframe has the same minimums and maximums per column as the input dataframe, 
@@ -25,7 +29,18 @@ def specials(df, find=['head','first','min','most','max','nan','last','tail'], i
       Possible values: 'head','first','min','most','max','nan','last','tail'
     * indicator: Show additional column with a note, why the row is in the result
     '''
-    
+
+    framework = 'pandas'
+    if isinstance(df, pl.DataFrame):
+        framework = 'polars'
+        df = df.to_pandas()
+
+    if len(df) == 0:
+        if framework == 'polars':
+            return pl.DataFrame()
+        else:
+            return pd.DataFrame()
+
     if type(find) is str:
         find = [find] #let the command take a string or list 
         
@@ -182,8 +197,9 @@ def specials(df, find=['head','first','min','most','max','nan','last','tail'], i
         result = rename_col(result,'__indicator__',indicator)
     
     result = drop_cols(result,'__score__')
-    if sort == 'index':
-        return result.sort_index()
+    result = result.sort_index()
+    if framework == 'polars':
+        return pl.from_pandas(result)
     else:
         return result
 
@@ -212,14 +228,20 @@ def sample(df, size=None):
     if df.shape[0] <= size:
         return df
     
-    sp = specials(df, sort='score')
+    sp = specials(df)
     
     # specials sind groß genug
     if sp.shape[0] >= size: 
         return sp.head(size).sort_index()
-    
-    sa = df.iloc[1:-1].sample(size-2)
-    return pd.concat([sp,sa]).head(size).sort_index()
+
+    if isinstance(sp, pd.DataFrame):
+        sa = df.iloc[1:-1].sample(size - sp.shape[0]) if df.shape[0] - 2 > 0 else df.iloc[1:-1].sample(0)
+        return pd.concat([sp, sa]).head(size).sort_index()
+    elif isinstance(sp, pl.DataFrame):
+        sa = df.slice(1, df.shape[0] - 2).sample(size - sp.shape[0]) if df.shape[0] - 2 > 0 else df.slice(1, 0)
+        return pl.concat([sp, sa], how='vertical_relaxed').head(size)
+    else:
+        raise TypeError("Input must be either pandas or polars DataFrame")
 
 
 sample_10     = partial(sample, size=10)    

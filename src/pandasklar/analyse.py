@@ -10,11 +10,13 @@ from pandas.api.types import is_string_dtype, is_numeric_dtype
 
 import bpyth  as bpy
 
-from .type_info    import type_info
+from .type_info_pandas    import type_info_pandas
 from .values_info  import values_info
 
 from .config       import Config
-from .pandas       import dataframe, reset_index, drop_cols, rename_col, move_cols, quicksample, first_valid_value, last_valid_value
+from .dataframe    import dataframe
+from .pandas       import reset_index, drop_cols, rename_col, move_cols, quicksample, first_valid_value, last_valid_value
+
 from .aggregate    import group_and_agg, top_values, top_values_count, most_freq_elt
 from .scale        import scale
 from .rank         import rank_without_group
@@ -27,7 +29,7 @@ from .rank         import rank_without_group
 # ==================================================================================================
 # 
 #
-def load_pickle( filename, resetindex='AUTO', changedatatype=False, verbose=None ): 
+def load_pickle(filename, reset_index='AUTO', changedatatype=False, verbose=None):
     '''
     Convenient function to load a DataFrame from pickle file.
     Optional optimisation of datatypes. Verbose if wanted.
@@ -42,9 +44,9 @@ def load_pickle( filename, resetindex='AUTO', changedatatype=False, verbose=None
         verbose = Config.get('VERBOSE')  
         
     result = pd.read_pickle(filename)
-    if resetindex == True:
+    if reset_index == True:
         result = result.reset_index()
-    elif resetindex == 'AUTO':
+    elif reset_index == 'AUTO':
         result = result.reset_index()    
         result = drop_cols(result, 'index')       
     
@@ -124,7 +126,7 @@ def analyse_datatype(data, human_readable=True):
     """
     
     if isinstance(data, pd.DataFrame): 
-        return dataframe( analyse_datatypes(data, human_readable=human_readable) ) 
+        return dataframe( analyse_datatypes(data, human_readable=human_readable), verbose=False, framework='pandas' )
         
     # Aufruf mit Index
     if isinstance(data, pd.Index): 
@@ -132,7 +134,7 @@ def analyse_datatype(data, human_readable=True):
         series.name = '__index__'
         return analyse_datatype(series, human_readable=human_readable)    
 
-    info = type_info(data)
+    info = type_info_pandas(data)
     result = {
         'col_name': data.name,
         'datatype_instance': info.name_instance,  
@@ -156,7 +158,7 @@ def analyse_datatypes(df, with_index=True, human_readable=True):
     Returns info about the datatypes and the mem_usage of the columns of a DataFrame.  
     """
     if isinstance(df, pd.Series): 
-        return dataframe( analyse_datatype(df, human_readable=human_readable), verbose=False ) 
+        return dataframe( analyse_datatype(df, human_readable=human_readable), verbose=False, framework='pandas' )
     
     # Kleine Probe reicht
     if df.shape[0] > 10:
@@ -167,7 +169,7 @@ def analyse_datatypes(df, with_index=True, human_readable=True):
         data += [ analyse_datatype( df.index, human_readable=human_readable) ]
     data     += [ analyse_datatype( df[col],  human_readable=human_readable) for col in df ]
 
-    result = dataframe(data, verbose=False)
+    result = dataframe(data, verbose=False, framework='pandas')
 
     # Zeilen-, Spalten- und Tabellenname
     result = result.rename_axis('col_no')    
@@ -195,7 +197,10 @@ def col_names(df, only='', without='XXXXXX', as_list=True, query=None, sort=Fals
         df = sort_cols_by_nunique(df)
         
     if query or not as_list:
-        info = analyse_cols(     df, with_index=False)      # komplette Analyse holen
+        try:
+            info = analyse_cols(     df, with_index=False)      # komplette Analyse holen
+        except:
+            info = analyse_datatypes(df, with_index=False)  # nur datatypes analysieren
     else:
         info = analyse_datatypes(df, with_index=False)      # nur datatypes analysieren      
     
@@ -242,7 +247,7 @@ def change_datatype(data, search=None, verbose=None, msg='', category_maxsize=-1
                 
         # vorgegebener Datatype
         if search: 
-            i = type_info(search)              
+            i = type_info_pandas(search)
             return data.astype(i.name_short)
             
         # vollautomatisch    
@@ -467,14 +472,18 @@ def analyse_freqs(data, cols=None, limits=[], splits=[], sort_count=True ):
     # generelle Fehler abfangen
     if data is None:
         return 'Nothing to analyze'
+
+    if isinstance(data, pd.Series):
+        if data.empty:
+            return 'Nothing to analyze'
     
     if not isinstance(data, pd.DataFrame):  
-        data = dataframe(data, autotranspose=1)
+        data = dataframe(data, verbose=False, framework='pandas')
         data.columns = ['item']
         return analyse_freqs( data, data.columns[0], limits=limits, splits=splits, sort_count=sort_count)
 
     if data.shape[0] == 0:
-        return 'No rows'
+        return 'Nothing to analyze'
     
     # Parameter cols 
     if type(cols) is str:
@@ -692,6 +701,25 @@ def same_but_different(df, same, different, sort=True, return_mask=False):
     * same:       Array of column names.
     * different:  Single column name.  This column is used to search for differences.
     """
+
+    # Leeren DataFrame abfangen
+    if len(df) == 0:
+        if return_mask:
+            return pd.Series(dtype=bool)
+        return pd.DataFrame()
+
+    # Falsche Eingaben abfangen
+    if not isinstance(same, list) or not isinstance(different, str):
+        if return_mask:
+            return pd.Series(dtype=bool)
+        return pd.DataFrame()
+
+    # Fehlende Spalten abfangen
+    if not all(col in df.columns for col in same) or different not in df.columns:
+        if return_mask:
+            return pd.Series(dtype=bool)
+        return pd.DataFrame()
+
     mask = df.groupby(same)[different].transform('nunique') > 1
     if return_mask:
         return mask
@@ -823,7 +851,7 @@ def memory_consumption( iteration_of_objects, limit=10, use_rtype=True):
     with warnings.catch_warnings():
         warnings.simplefilter(action='ignore', category=FutureWarning)
         result = bpy.memory_consumption( iteration_of_objects, limit=limit, use_rtype=use_rtype)
-        result = dataframe(result, verbose=False)
+        result = dataframe(result, verbose=False, framework='pandas')
         if use_rtype:
             result.columns = ['name','rtype','size']
         else:

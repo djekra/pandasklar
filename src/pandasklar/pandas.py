@@ -1,7 +1,7 @@
 
 import warnings, copy
 
-import pandas as pd 
+import pandas as pd
 import numpy  as np
 import bpyth  as bpy
    
@@ -19,120 +19,6 @@ from .rank         import rank
 #################################################################################################
 
 
-
-
-    
-# ==================================================================================================
-# Create
-# ==================================================================================================
-# 
-#
-def dataframe(inp, test=False, autotranspose=False, verbose=None):
-    """ 
-    Converts multidimensional objects into dataframes.
-    Dictionaries and Tuples are interpreted column-wise, Lists and Counters by rows.
-    (Exception: A list of Series is also interpreted column-wise, like a tuple of Series.)
-    * test:           Do additional test if the shape is ok
-    * autotranspose:  False => no autotranspose
-                      n     => If the result is n times wider than long, it is transposed.  
-    """
-    
-    if verbose is None:
-        verbose = Config.get('VERBOSE')   
-        
-    if isinstance(inp, pd.Series):
-        return pd.DataFrame(inp)
-    
-    def do_test(inp, result, test, verbose, inp_rtype, inp_shape, gedreht):
-        if verbose:
-            print('rotated='+str(gedreht) + ' Output rtype=' + str(bpy.rtype(result)), 'shape=' + str(bpy.shape(result)))
-        if not test:
-            return True
-        
-        # Nur die ersten beiden Dimensionen interessieren
-        inp_shape = inp_shape[:2]
-        
-        # Erste Dimension ggf. ergänzen
-        if len(inp_shape) == 1:
-            inp_shape = (1,inp_shape[0])          
-            
-        # spaltenweise interpretiert?
-        elif gedreht:
-            inp_shape = (inp_shape[1],inp_shape[0])
-
-        
-        if inp_shape != bpy.shape(result)[:2]:
-            if verbose:
-                print('Shape does not fit')            
-            return False
-        return True
-    
-    
-    # Spaltennamen
-    def cols_benennen(result):
-        if result.shape[1] > 52: # zu breit, kann man nicht umbenennen
-            return result
-        # gibt es Duplikate in den Spaltennamen?                       oder sind die Spalten rein numerisch?
-        if (len(list(result.columns))  !=  len(set(result.columns)))   or   isinstance(result.columns, pd.RangeIndex):     
-            result.columns = list('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz')[0:result.shape[1]] 
-        return result
-    
-    # Analyse
-    inp_rtype = bpy.rtype(inp)
-    gedreht = False # normale Orientierung
-    try:
-        inp_shape = bpy.shape(inp) 
-    except:
-        inp_shape = (-77,-77)
-    if verbose:
-        print('Input rtype=' + str(inp_rtype), 'shape=' + str(inp_shape))
-    
-    # tuple of Series oder list of Series: 
-    # in dict wandeln und gedreht vormerken 
-    if len(inp_rtype)>=2  and  inp_rtype[0] in ['list','tuple']  and  inp_rtype[1] == 'Series':
-        sp = tuple(a.name for a in inp) 
-        if (len(list(sp))  !=  len(set(sp))): # dups?    
-            sp = tuple('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz')[0:len(inp)]        
-        inp = dict(zip(sp, inp)) 
-        gedreht = True
-        
-    # tuple: 
-    # in dict wandeln und gedreht vormerken    
-    elif inp_rtype[0] == 'tuple':
-        sp = tuple('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz')[0:len(inp)] 
-        inp = dict(zip(sp, inp))  
-        gedreht = True
-        
-    # dict: 
-    # gedreht vormerken   
-    elif inp_rtype[0] in ['dict']:
-        gedreht = True        
-    
-    # 0 Dimensionen: Leeres DataFrame
-    if len(inp_shape) == 0:
-        result = pd.DataFrame()
-        assert do_test(inp, result, test=test, verbose=verbose, inp_rtype=inp_rtype, inp_shape=inp_shape, gedreht=gedreht)
-        return result
-    
-    # 1 Dimensionen: Eine Zeile
-    if len(inp_shape) == 1:
-        result = pd.DataFrame([inp])
-        assert do_test([inp], result, test=test, verbose=verbose,inp_rtype=inp_rtype, inp_shape=inp_shape, gedreht=gedreht)
-        if autotranspose  and  result.shape[0]*autotranspose < result.shape[1]:  # Hundertmal breiter als lang: transpose
-            result = result.transpose()    
-        result = cols_benennen(result)             
-        return result    
-    
-    if isinstance(inp, dict): 
-        result = pd.DataFrame.from_records(inp, columns=inp.keys())
-    else:
-        result = pd.DataFrame.from_records(inp)
-
-    assert do_test(inp, result, test=test, verbose=verbose, inp_rtype=inp_rtype, inp_shape=inp_shape, gedreht=gedreht)
-    if autotranspose  and  result.shape[0]*autotranspose < result.shape[1]: # Hundertmal breiter als lang: transpose
-        result = result.transpose()
-    result = cols_benennen(result)        
-    return result
 
 
 
@@ -353,7 +239,7 @@ def update_col(df_to, df_from, on=[], left_on=[], right_on=[], col='', col_renam
         mask = result[col_rename+keep] == result[col_rename]
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')           
-            result.loc[mask,col_rename+keep] = np.NaN
+            result.loc[mask,col_rename+keep] = np.nan
         
     if df_to.shape[0] != result.shape[0]:
         print('update_col:','WARNING: df_from identifier not unique.','I call this again with func="max"')
@@ -433,7 +319,7 @@ def copy_datatype(data_to, data_from):
 # ==================================================================================================
     
 
-def reset_index(df, keep_as=None):
+def reset_index(df, keep_as=None, sort=False):
     '''
     Creates a new, unnamed index.
     * keep_as: If keep_as is given, the old index is preserved as a row with this name.
@@ -442,6 +328,12 @@ def reset_index(df, keep_as=None):
     
     if len(df.index.names) != 1:
         raise ValueError('index must be 1dim')
+
+    if sort:
+        try:
+            df = df.sort_values(list(df.columns))
+        except:
+            pass
     
     if keep_as:
         df.index.names = [keep_as]    

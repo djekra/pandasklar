@@ -5,7 +5,7 @@ import pandas as pd
 from pandas.api.types import is_string_dtype, is_numeric_dtype
 
 from .config       import Config
-from .type_info    import type_info
+from .type_info_pandas    import type_info_pandas
 
 
 
@@ -34,7 +34,7 @@ class values_info:
     def __init__(self, data, category_maxsize=-1, nanless_ints=False):
         
         from pandasklar.analyse   import ntypes
-        from pandasklar.type_info import type_info
+        from pandasklar.type_info_pandas import type_info_pandas
         
         self.n         = int(data.shape[0])
         self.nnan      = int(data.isna().sum())
@@ -55,7 +55,7 @@ class values_info:
             try:
                 self.vmedian = round(float(data.quantile(0.5)),2) 
             except:
-                self.vmedian = np.NaN
+                self.vmedian = np.nan
                 
         else: 
             data_dropna = data.dropna()
@@ -63,16 +63,16 @@ class values_info:
                 self.vmin    = data_dropna.min()
                 self.vmax    = data_dropna.max()
             except:
-                self.vmin    = np.NaN
-                self.vmax    = np.NaN                
-            self.vmean   = np.NaN   
-            self.vmedian = np.NaN
-            self.vsum    = np.NaN
+                self.vmin    = np.nan
+                self.vmax    = np.nan                
+            self.vmean   = np.nan   
+            self.vmedian = np.nan
+            self.vsum    = np.nan
             
         # datatype_suggest
         self.datatype_suggest = ''
         if (self.ntypes == 1):
-            self.type_info = type_info(data)  
+            self.type_info = type_info_pandas(data)
             
             # int_versuche: Dtypes für Integer
             if self.nnan == 0  and nanless_ints:
@@ -92,7 +92,7 @@ class values_info:
                 try:
                     if (int(self.vmin)-self.vmin == 0)   and    (int(self.vmax)-self.vmax == 0)   and   ((data.astype('Int64')-data).sum() == 0): 
                         for versuch in int_versuche :
-                            i = type_info(versuch)            
+                            i = type_info_pandas(versuch)
                             if i.xmin <= self.vmin   and   i.xmax >= self.vmax:
                                 self.datatype_suggest = versuch
                                 break                       
@@ -102,7 +102,7 @@ class values_info:
             # float verkleinern?
             if self.type_info.name_short.startswith('float')   and  self.datatype_suggest=='':
                 for versuch in ['np.float32'] : # float16 nehmen wir nicht, da kann man keinen Mittelwert berechnen
-                    i = type_info(versuch)            
+                    i = type_info_pandas(versuch)
                     if i.xmin < self.vmin   and   i.xmax > self.vmax:
                         self.datatype_suggest = versuch
                         break
@@ -112,7 +112,7 @@ class values_info:
             if (self.type_info.name_short.startswith(('int','uint','Int'))   and   self.datatype_suggest=='')   or   \
                ((self.type_info.name_instance =='int')   and   (self.type_info.name_short == 'object')   and   self.datatype_suggest==''):
                 for versuch in int_versuche :
-                    i = type_info(versuch)            
+                    i = type_info_pandas(versuch)
                     if i.xmin <= self.vmin   and   i.xmax >= self.vmax:
                         self.datatype_suggest = versuch
                         break   
@@ -146,7 +146,7 @@ def identify_datatype(series):
     data_type = identify_data_type(data)
     print(data_type)
     '''
-    result = type_info(series).name_short 
+    result = type_info_pandas(series).name_short
     if result == 'object':
         result = ''
 
